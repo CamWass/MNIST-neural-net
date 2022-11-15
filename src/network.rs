@@ -30,7 +30,7 @@ struct WeightDeltas {
 }
 
 pub struct NeuralNet {
-    epochs: usize,
+    iterations: usize,
     learn_rate: f64,
     params: Params,
 }
@@ -68,8 +68,8 @@ impl NeuralNet {
         }
 
         Self {
-            // epochs: 10,
-            epochs: 2,
+            // iterations: 10,
+            iterations: 2,
             learn_rate: 0.001,
             // learn_rate: 0.1,
             params,
@@ -256,7 +256,7 @@ impl NeuralNet {
         test_labels: &[[f64; 10]],
     ) {
         let start_time = Instant::now();
-        for iteration in 0..self.epochs {
+        for iteration in 0..self.iterations {
             // TODO: remove take()
             for (x, y) in train_images
                 .iter()
@@ -277,7 +277,7 @@ impl NeuralNet {
 
             let accuracy = self.compute_accuracy(test_images, test_labels);
             println!(
-                "Epoch: {}, Time Spent: {}s, Accuracy: {}%",
+                "Iteration: {}, Time elapsed: {}s, Accuracy: {}%",
                 iteration,
                 start_time.elapsed().as_secs(),
                 accuracy * 100.0
