@@ -4,40 +4,68 @@ use rand::Rng;
 
 use rand_distr::{DistIter, StandardNormal};
 
-type Matrix<T> = Vec<Vec<T>>;
+/// An `m` by `n` matrix i.e. `m` rows and `n` columns.
+type Matrix<T, const M: usize, const N: usize> = [[T; N]; M];
 
-#[derive(Default, Clone, PartialEq)]
 struct Params {
-    W1: Matrix<f64>,
-    W2: Matrix<f64>,
-    W3: Matrix<f64>,
+    W1: Matrix<f64, 128, 784>,
+    W2: Matrix<f64, 64, 128>,
+    W3: Matrix<f64, 10, 64>,
 
-    A0: Vec<f64>,
-    A1: Vec<f64>,
-    A2: Vec<f64>,
-    A3: Vec<f64>,
+    A0: [f64; 784],
+    A1: [f64; 128],
+    A2: [f64; 64],
+    A3: [f64; 10],
 
-    Z1: Vec<f64>,
-    Z2: Vec<f64>,
-    Z3: Vec<f64>,
+    Z1: [f64; 128],
+    Z2: [f64; 64],
+    Z3: [f64; 10],
 }
 
-#[derive(Default)]
+impl Default for Params {
+    fn default() -> Self {
+        Self {
+            W1: [[0.0; 784]; 128],
+            W2: [[0.0; 128]; 64],
+            W3: [[0.0; 64]; 10],
+
+            A0: [0.0; 784],
+            A1: [0.0; 128],
+            A2: [0.0; 64],
+            A3: [0.0; 10],
+
+            Z1: [0.0; 128],
+            Z2: [0.0; 64],
+            Z3: [0.0; 10],
+        }
+    }
+}
+
 struct WeightDeltas {
-    W1: Matrix<f64>,
-    W2: Matrix<f64>,
-    W3: Matrix<f64>,
+    W1: Matrix<f64, 128, 784>,
+    W2: Matrix<f64, 64, 128>,
+    W3: Matrix<f64, 10, 64>,
+}
+
+impl Default for WeightDeltas {
+    fn default() -> Self {
+        Self {
+            W1: [[0.0; 784]; 128],
+            W2: [[0.0; 128]; 64],
+            W3: [[0.0; 64]; 10],
+        }
+    }
 }
 
 pub struct NeuralNet {
     iterations: usize,
     learn_rate: f64,
-    params: Params,
+    params: Box<Params>,
 }
 
 impl NeuralNet {
     pub fn new() -> Self {
-        let mut params = Params::default();
+        let mut params = Box::new(Params::default());
 
         let mut rng: DistIter<_, _, f64> = rand::thread_rng().sample_iter(StandardNormal);
 
@@ -48,19 +76,16 @@ impl NeuralNet {
         let hidden_2 = 64;
         let output_layer = 10;
 
-        params.W1 = vec![vec![0.0; input_layer]; hidden_1];
         for row in &mut params.W1 {
             for element in row {
                 *element = rng.next().unwrap() * (1.0 / hidden_1 as f64).sqrt();
             }
         }
-        params.W2 = vec![vec![0.0; hidden_1]; hidden_2];
         for row in &mut params.W2 {
             for element in row {
                 *element = rng.next().unwrap() * (1.0 / hidden_2 as f64).sqrt();
             }
         }
-        params.W3 = vec![vec![0.0; hidden_2]; output_layer];
         for row in &mut params.W3 {
             for element in row {
                 *element = rng.next().unwrap() * (1.0 / output_layer as f64).sqrt();
@@ -78,8 +103,7 @@ impl NeuralNet {
 
     fn forward_pass(&mut self, image: &[f64; 784]) {
         // input layer activations becomes sample
-        self.params.A0.clear();
-        self.params.A0.extend_from_slice(image);
+        self.params.A0.copy_from_slice(image);
 
         assert!(self.params.W1.iter().all(|w| w.iter().all(|&w| w <= 1.0)));
         assert!(self.params.A0.iter().all(|&w| w <= 1.0));
@@ -88,11 +112,6 @@ impl NeuralNet {
         self.params.Z1 = matrix_multiply(&self.params.W1, &self.params.A0);
         self.params.A1 = sigmoid(&self.params.Z1, false);
 
-        // dbg!(&self.params.W1);
-        // dbg!(&self.params.A0);
-        // dbg!(&self.params.Z1);
-        // dbg!(&self.params.A1);
-
         // hidden layer 1 to hidden layer 2
         self.params.Z2 = matrix_multiply(&self.params.W2, &self.params.A1);
         self.params.A2 = sigmoid(&self.params.Z2, false);
@@ -100,89 +119,48 @@ impl NeuralNet {
         // hidden layer 2 to output layer
         self.params.Z3 = matrix_multiply(&self.params.W3, &self.params.A2);
         self.params.A3 = softmax(&self.params.Z3, false);
-
-        // println!("params = {{");
-        // println!(
-        //     "  W1: {:?}",
-        //     (self.params.W1.len(), self.params.W1[0].len())
-        // );
-        // println!(
-        //     "  W2: {:?}",
-        //     (self.params.W2.len(), self.params.W2[0].len())
-        // );
-        // println!(
-        //     "  W3: {:?}",
-        //     (self.params.W3.len(), self.params.W3[0].len())
-        // );
-        // println!("");
-        // println!("  A0: {}", (self.params.A0.len()));
-        // println!("  A1: {}", (self.params.A1.len()));
-        // println!("  A2: {}", (self.params.A2.len()));
-        // println!("  A3: {}", (self.params.A3.len()));
-        // println!("");
-        // println!("  Z1: {}", (self.params.Z1.len()));
-        // println!("  Z2: {}", (self.params.Z2.len()));
-        // println!("  Z3: {}", (self.params.Z3.len()));
-        // println!("");
-        // println!("}}");
-
-        // self.params.A3
     }
 
-    fn backward_pass(&mut self, target: &[f64; 10]) -> WeightDeltas {
+    fn backward_pass(&mut self, target: &[f64; 10]) -> Box<WeightDeltas> {
         // This is the backpropagation algorithm, for calculating the updates
         // of the neural network's parameters.
 
         let output = &self.params.A3;
 
-        let mut change_w = WeightDeltas::default();
+        let mut change_w = Box::new(WeightDeltas::default());
 
         // Calculate W3 update
 
-        let soft_max = softmax(&self.params.Z3, true);
-        let error = output
-            .iter()
-            .zip(target)
-            .zip(soft_max)
-            .map(|((o, t), s)| 2.0 * (o - t) / 10.0 * s)
-            .collect::<Vec<_>>();
+        let mut error = softmax(&self.params.Z3, true);
+        for ((error, output), target) in error.iter_mut().zip(output).zip(target) {
+            *error = 2.0 * (output - target) / 10.0 * *error
+        }
         change_w.W3 = outer_product(&error, &self.params.A2);
-
-        assert_eq!(change_w.W3.len(), self.params.W3.len());
-        assert_eq!(change_w.W3[0].len(), self.params.W3[0].len());
 
         // Calculate W2 update
 
         let Z2_sigmoid = sigmoid(&self.params.Z2, true);
         let W3_transpose = transpose(&self.params.W3);
-        let error = matrix_multiply(&W3_transpose, &error)
-            .into_iter()
-            .zip(Z2_sigmoid)
-            .map(|(a, b)| a * b)
-            .collect();
+        let mut error = matrix_multiply(&W3_transpose, &error);
+        for (a, b) in error.iter_mut().zip(Z2_sigmoid) {
+            *a = *a * b;
+        }
         change_w.W2 = outer_product(&error, &self.params.A1);
-
-        assert_eq!(change_w.W2.len(), self.params.W2.len());
-        assert_eq!(change_w.W2[0].len(), self.params.W2[0].len());
 
         // Calculate W1 update
 
         let Z1_sigmoid = sigmoid(&self.params.Z1, true);
         let W2_transpose = transpose(&self.params.W2);
-        let error = matrix_multiply(&W2_transpose, &error)
-            .into_iter()
-            .zip(Z1_sigmoid)
-            .map(|(a, b)| a * b)
-            .collect();
+        let mut error = matrix_multiply(&W2_transpose, &error);
+        for (a, b) in error.iter_mut().zip(Z1_sigmoid) {
+            *a = *a * b;
+        }
         change_w.W1 = outer_product(&error, &self.params.A0);
-
-        assert_eq!(change_w.W1.len(), self.params.W1.len());
-        assert_eq!(change_w.W1[0].len(), self.params.W1[0].len());
 
         change_w
     }
 
-    fn update_network_parameters(&mut self, changes_to_w: WeightDeltas) {
+    fn update_network_parameters(&mut self, changes_to_w: &WeightDeltas) {
         // Update network parameters according to update rule from
         // Stochastic Gradient Descent.
         //
@@ -192,21 +170,21 @@ impl NeuralNet {
         //     gradient ∇J(x, y):  the gradient of the objective function,
         //                         i.e. the change for a specific theta θ
 
-        // dbg!(&changes_to_w.W3);
-
-        let x = [
-            (&mut self.params.W1, changes_to_w.W1),
-            (&mut self.params.W2, changes_to_w.W2),
-            (&mut self.params.W3, changes_to_w.W3),
-        ];
-
-        for (weights, deltas) in x {
+        fn update_params<const M: usize, const N: usize>(
+            weights: &mut Matrix<f64, M, N>,
+            deltas: &Matrix<f64, M, N>,
+            learn_rate: f64,
+        ) {
             for (row, row_deltas) in weights.iter_mut().zip(deltas) {
                 for (w, delta) in row.iter_mut().zip(row_deltas) {
-                    *w -= self.learn_rate * delta;
+                    *w -= learn_rate * delta;
                 }
             }
         }
+
+        update_params(&mut self.params.W1, &changes_to_w.W1, self.learn_rate);
+        update_params(&mut self.params.W2, &changes_to_w.W2, self.learn_rate);
+        update_params(&mut self.params.W3, &changes_to_w.W3, self.learn_rate);
     }
 
     fn compute_accuracy(&mut self, images: &[[f64; 784]], labels: &[[f64; 10]]) -> f64 {
@@ -214,12 +192,8 @@ impl NeuralNet {
         // of the maximum value in the output equals the indices in the label
         // y. Then it sums over each prediction and calculates the accuracy.
         let mut correct_predictions = 0;
-        // let mut predictions = Vec::with_capacity(images.len());
 
         for (image, label) in images.iter().zip(labels) {
-            // let output = self.forward_pass(x);
-            // let pred = np.argmax(output);
-            // predictions.append(pred == np.argmax(y));
             self.forward_pass(image);
             let pred = self
                 .params
@@ -233,19 +207,12 @@ impl NeuralNet {
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.total_cmp(b))
                 .map(|(index, _)| index);
-            // dbg!(pred, target);
             if pred == target {
                 correct_predictions += 1;
             }
-            // let result = if pred == target { 1.0 } else { 0.0 };
-            // predictions.push(result);
         }
 
-        println!("correct_predictions: {}", correct_predictions);
-
         correct_predictions as f64 / images.len() as f64
-
-        // predictions.iter().sum::<f64>() / images.len() as f64
     }
 
     pub fn train(
@@ -270,7 +237,7 @@ impl NeuralNet {
                 // self.update_network_parameters(changes_to_w);
                 self.forward_pass(x);
                 let changes_to_w = self.backward_pass(y);
-                self.update_network_parameters(changes_to_w);
+                self.update_network_parameters(&changes_to_w);
                 // dbg!(&self.params.W3);
                 // println!("params changed: {}", old != self.params.W3);
             }
@@ -289,66 +256,74 @@ impl NeuralNet {
     }
 }
 
-fn outer_product(a: &Vec<f64>, b: &Vec<f64>) -> Matrix<f64> {
-    // assert_eq!(a.len(), b.len());
+fn outer_product<const M: usize, const N: usize>(a: &[f64; M], b: &[f64; N]) -> Matrix<f64, M, N> {
+    let mut result = [[0.0; N]; M];
 
-    a.iter()
-        .map(|a| b.iter().map(|b| a * b).collect())
-        .collect()
-}
-
-fn transpose(matrix: &Matrix<f64>) -> Matrix<f64> {
-    let old_row_size = matrix[0].len();
-    let old_col_size = matrix.len();
-    let new_row_size = old_col_size;
-    let new_col_size = old_row_size;
-
-    let mut transpose = Vec::with_capacity(new_col_size);
-
-    for row in 0..new_col_size {
-        transpose.push(Vec::with_capacity(new_row_size));
-        for col in 0..new_row_size {
-            transpose[row].push(matrix[col][row]);
+    for row in 0..M {
+        for col in 0..N {
+            result[row][col] = a[row] * b[col]
         }
     }
 
-    // Dimensions should have swapped.
-    assert_eq!(transpose.len(), matrix[0].len());
-    assert_eq!(transpose[0].len(), matrix.len());
+    result
+}
+
+fn transpose<const M: usize, const N: usize>(matrix: &Matrix<f64, M, N>) -> Matrix<f64, N, M> {
+    let mut transpose = [[0.0; M]; N];
+
+    for row in 0..N {
+        for col in 0..M {
+            transpose[row][col] = matrix[col][row];
+        }
+    }
 
     transpose
 }
 
-fn matrix_multiply(a: &Matrix<f64>, b: &Vec<f64>) -> Vec<f64> {
-    assert_eq!(a[0].len(), b.len());
+fn matrix_multiply<const M: usize, const N: usize>(
+    a: &Matrix<f64, M, N>,
+    b: &[f64; N],
+) -> [f64; M] {
+    let mut result = [0.0; M];
 
-    a.iter()
-        .map(|row| row.iter().zip(b).map(|(a, b)| a * b).sum())
-        .collect()
-}
-
-fn sigmoid(x: &[f64], derivative: bool) -> Vec<f64> {
-    if derivative {
-        x.iter()
-            .map(|&x| ((-x).exp()) / (((-x).exp() + 1.0).powf(2.0)))
-            .collect()
-    } else {
-        x.iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect()
+    for (i, row) in a.iter().enumerate() {
+        result[i] = row.iter().zip(b).map(|(a, b)| a * b).sum();
     }
+
+    result
 }
 
-fn softmax(x: &[f64], derivative: bool) -> Vec<f64> {
+fn sigmoid<const N: usize>(x: &[f64; N], derivative: bool) -> [f64; N] {
+    let mut result = [0.0; N];
+    if derivative {
+        for (i, &x) in x.iter().enumerate() {
+            result[i] = ((-x).exp()) / (((-x).exp() + 1.0).powf(2.0));
+        }
+    } else {
+        for (i, &x) in x.iter().enumerate() {
+            result[i] = 1.0 / (1.0 + (-x).exp());
+        }
+    }
+    result
+}
+
+fn softmax<const N: usize>(x: &[f64; N], derivative: bool) -> [f64; N] {
     // Numerically stable with large exponentials
+
+    let mut result = [0.0; N];
 
     let max = x.iter().copied().reduce(f64::max).unwrap();
     let exp_sum: f64 = x.iter().map(|&x| (x - max).exp()).sum();
     if derivative {
-        x.iter()
-            .map(|&x| (x - max).exp() / exp_sum * (1.0 - (x - max).exp() / exp_sum))
-            .collect()
+        for (i, &x) in x.iter().enumerate() {
+            result[i] = (x - max).exp() / exp_sum * (1.0 - (x - max).exp() / exp_sum)
+        }
     } else {
-        x.iter().map(|&x| (x - max).exp() / exp_sum).collect()
+        for (i, &x) in x.iter().enumerate() {
+            result[i] = (x - max).exp() / exp_sum;
+        }
     }
+    result
 }
 
 // pub struct NeuralNetBuilder {}
