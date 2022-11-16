@@ -5,8 +5,6 @@
 
 use std::fs;
 
-mod network;
-
 use network::*;
 
 // const a: [u8; 100] = [0; 100];

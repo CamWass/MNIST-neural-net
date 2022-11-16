@@ -1,7 +1,10 @@
+#![allow(non_snake_case)]
+#![allow(unused_variables)]
+#![allow(dead_code)]
+
 use std::time::Instant;
 
 use rand::Rng;
-
 use rand_distr::{DistIter, StandardNormal};
 
 /// An `m` by `n` matrix i.e. `m` rows and `n` columns.
