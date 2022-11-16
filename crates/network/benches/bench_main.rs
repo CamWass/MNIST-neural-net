@@ -22,7 +22,7 @@ fn parse_labels<const N: usize>(data: &[u8]) -> &[u8] {
     &data[8..]
 }
 
-fn encode_labels(labels: &[u8]) -> Vec<[f64; 10]> {
+fn encode_labels(labels: &[u8]) -> Vec<[f32; 10]> {
     labels
         .iter()
         .map(|&l| {
@@ -64,13 +64,13 @@ fn parse_images<const N: usize, const S: usize>(data: &[u8]) -> &[[u8; S]] {
     image_data
 }
 
-fn encode_images(images: &[[u8; 784]]) -> Vec<[f64; 784]> {
+fn encode_images(images: &[[u8; 784]]) -> Vec<[f32; 784]> {
     images
         .iter()
         .map(|image| {
             let mut a = [0.0; 784];
             for (i, &pixel) in image.iter().enumerate() {
-                a[i] = (pixel as f64) / 255.0;
+                a[i] = (pixel as f32) / 255.0;
             }
             a
         })

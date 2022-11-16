@@ -10,18 +10,18 @@ type Matrix<T, const M: usize, const N: usize> = [[T; N]; M];
 
 /// Only pub for benchmarks.
 pub struct Params {
-    W1: Matrix<f64, 128, 784>,
-    W2: Matrix<f64, 64, 128>,
-    W3: Matrix<f64, 10, 64>,
+    W1: Matrix<f32, 128, 784>,
+    W2: Matrix<f32, 64, 128>,
+    W3: Matrix<f32, 10, 64>,
 
-    A0: [f64; 784],
-    A1: [f64; 128],
-    A2: [f64; 64],
-    A3: [f64; 10],
+    A0: [f32; 784],
+    A1: [f32; 128],
+    A2: [f32; 64],
+    A3: [f32; 10],
 
-    Z1: [f64; 128],
-    Z2: [f64; 64],
-    Z3: [f64; 10],
+    Z1: [f32; 128],
+    Z2: [f32; 64],
+    Z3: [f32; 10],
 }
 
 impl Default for Params {
@@ -44,9 +44,9 @@ impl Default for Params {
 }
 
 struct WeightDeltas {
-    W1: Matrix<f64, 128, 784>,
-    W2: Matrix<f64, 64, 128>,
-    W3: Matrix<f64, 10, 64>,
+    W1: Matrix<f32, 128, 784>,
+    W2: Matrix<f32, 64, 128>,
+    W3: Matrix<f32, 10, 64>,
 }
 
 impl Default for WeightDeltas {
@@ -61,7 +61,7 @@ impl Default for WeightDeltas {
 
 pub struct NeuralNet {
     iterations: usize,
-    learn_rate: f64,
+    learn_rate: f32,
     params: Box<Params>,
 }
 
@@ -77,7 +77,7 @@ impl NeuralNet {
     fn init(iterations: usize, rnd_seed: u64) -> Self {
         let mut params = Box::new(Params::default());
 
-        let mut rng: DistIter<_, _, f64> =
+        let mut rng: DistIter<_, _, f32> =
             SmallRng::seed_from_u64(rnd_seed).sample_iter(StandardNormal);
 
         let input_layer = 784;
@@ -87,17 +87,17 @@ impl NeuralNet {
 
         for row in &mut params.W1 {
             for element in row {
-                *element = rng.next().unwrap() * (1.0 / hidden_1 as f64).sqrt();
+                *element = rng.next().unwrap() * (1.0 / hidden_1 as f32).sqrt();
             }
         }
         for row in &mut params.W2 {
             for element in row {
-                *element = rng.next().unwrap() * (1.0 / hidden_2 as f64).sqrt();
+                *element = rng.next().unwrap() * (1.0 / hidden_2 as f32).sqrt();
             }
         }
         for row in &mut params.W3 {
             for element in row {
-                *element = rng.next().unwrap() * (1.0 / output_layer as f64).sqrt();
+                *element = rng.next().unwrap() * (1.0 / output_layer as f32).sqrt();
             }
         }
 
@@ -108,7 +108,7 @@ impl NeuralNet {
         }
     }
 
-    fn forward_pass(&mut self, image: &[f64; 784]) {
+    fn forward_pass(&mut self, image: &[f32; 784]) {
         // input layer activations becomes sample
         self.params.A0.copy_from_slice(image);
 
@@ -128,7 +128,7 @@ impl NeuralNet {
         self.params.A3 = softmax(&self.params.Z3, false);
     }
 
-    fn backward_pass(&mut self, target: &[f64; 10]) -> Box<WeightDeltas> {
+    fn backward_pass(&mut self, target: &[f32; 10]) -> Box<WeightDeltas> {
         // This is the backpropagation algorithm, for calculating the updates
         // of the neural network's parameters.
 
@@ -178,9 +178,9 @@ impl NeuralNet {
         //                         i.e. the change for a specific theta θ
 
         fn update_params<const M: usize, const N: usize>(
-            weights: &mut Matrix<f64, M, N>,
-            deltas: &Matrix<f64, M, N>,
-            learn_rate: f64,
+            weights: &mut Matrix<f32, M, N>,
+            deltas: &Matrix<f32, M, N>,
+            learn_rate: f32,
         ) {
             for (row, row_deltas) in weights.iter_mut().zip(deltas) {
                 for (w, delta) in row.iter_mut().zip(row_deltas) {
@@ -194,7 +194,7 @@ impl NeuralNet {
         update_params(&mut self.params.W3, &changes_to_w.W3, self.learn_rate);
     }
 
-    pub fn compute_accuracy(&mut self, images: &[[f64; 784]], labels: &[[f64; 10]]) -> f64 {
+    pub fn compute_accuracy(&mut self, images: &[[f32; 784]], labels: &[[f32; 10]]) -> f32 {
         // This function does a forward pass of x, then checks if the indices
         // of the maximum value in the output equals the indices in the label
         // y. Then it sums over each prediction and calculates the accuracy.
@@ -219,17 +219,17 @@ impl NeuralNet {
             }
         }
 
-        correct_predictions as f64 / images.len() as f64
+        correct_predictions as f32 / images.len() as f32
     }
 
     /// Only pub for benchmarks.
-    pub fn train_one(&mut self, train_image: &[f64; 784], train_label: &[f64; 10]) {
+    pub fn train_one(&mut self, train_image: &[f32; 784], train_label: &[f32; 10]) {
         self.forward_pass(train_image);
         let changes_to_w = self.backward_pass(train_label);
         self.update_network_parameters(&changes_to_w);
     }
 
-    pub fn train(&mut self, train_images: &[[f64; 784]], train_labels: &[[f64; 10]]) {
+    pub fn train(&mut self, train_images: &[[f32; 784]], train_labels: &[[f32; 10]]) {
         for (x, y) in train_images.iter().zip(train_labels) {
             self.train_one(x, y);
         }
@@ -241,7 +241,7 @@ impl NeuralNet {
     }
 }
 
-fn outer_product<const M: usize, const N: usize>(a: &[f64; M], b: &[f64; N]) -> Matrix<f64, M, N> {
+fn outer_product<const M: usize, const N: usize>(a: &[f32; M], b: &[f32; N]) -> Matrix<f32, M, N> {
     let mut result = [[0.0; N]; M];
 
     for row in 0..M {
@@ -253,7 +253,7 @@ fn outer_product<const M: usize, const N: usize>(a: &[f64; M], b: &[f64; N]) -> 
     result
 }
 
-fn transpose<const M: usize, const N: usize>(matrix: &Matrix<f64, M, N>) -> Matrix<f64, N, M> {
+fn transpose<const M: usize, const N: usize>(matrix: &Matrix<f32, M, N>) -> Matrix<f32, N, M> {
     let mut transpose = [[0.0; M]; N];
 
     for row in 0..N {
@@ -266,9 +266,9 @@ fn transpose<const M: usize, const N: usize>(matrix: &Matrix<f64, M, N>) -> Matr
 }
 
 fn matrix_multiply<const M: usize, const N: usize>(
-    a: &Matrix<f64, M, N>,
-    b: &[f64; N],
-) -> [f64; M] {
+    a: &Matrix<f32, M, N>,
+    b: &[f32; N],
+) -> [f32; M] {
     let mut result = [0.0; M];
 
     for (i, row) in a.iter().enumerate() {
@@ -278,7 +278,7 @@ fn matrix_multiply<const M: usize, const N: usize>(
     result
 }
 
-fn sigmoid<const N: usize>(x: &[f64; N], derivative: bool) -> [f64; N] {
+fn sigmoid<const N: usize>(x: &[f32; N], derivative: bool) -> [f32; N] {
     let mut result = [0.0; N];
     if derivative {
         for (i, &x) in x.iter().enumerate() {
@@ -292,13 +292,13 @@ fn sigmoid<const N: usize>(x: &[f64; N], derivative: bool) -> [f64; N] {
     result
 }
 
-fn softmax<const N: usize>(x: &[f64; N], derivative: bool) -> [f64; N] {
+fn softmax<const N: usize>(x: &[f32; N], derivative: bool) -> [f32; N] {
     // Numerically stable with large exponentials
 
     let mut result = [0.0; N];
 
-    let max = x.iter().copied().reduce(f64::max).unwrap();
-    let exp_sum: f64 = x.iter().map(|&x| (x - max).exp()).sum();
+    let max = x.iter().copied().reduce(f32::max).unwrap();
+    let exp_sum: f32 = x.iter().map(|&x| (x - max).exp()).sum();
     if derivative {
         for (i, &x) in x.iter().enumerate() {
             result[i] = (x - max).exp() / exp_sum * (1.0 - (x - max).exp() / exp_sum)
