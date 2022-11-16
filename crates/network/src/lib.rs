@@ -8,7 +8,6 @@ use rand_distr::{DistIter, StandardNormal};
 /// An `m` by `n` matrix i.e. `m` rows and `n` columns.
 type Matrix<T, const M: usize, const N: usize> = [[T; N]; M];
 
-/// Only pub for benchmarks.
 pub struct Params {
     W1: Matrix<f32, 128, 784>,
     W2: Matrix<f32, 64, 128>,
@@ -59,28 +58,27 @@ impl Default for WeightDeltas {
     }
 }
 
+const LEARN_RATE: f32 = 0.001;
+
 pub struct NeuralNet {
-    iterations: usize,
-    learn_rate: f32,
     params: Box<Params>,
 }
 
 impl NeuralNet {
     pub fn new() -> Self {
-        Self::init(10, rand::thread_rng().gen())
+        Self::init(rand::thread_rng().gen())
     }
 
     pub fn new_for_bench(rng_seed: u64) -> Self {
-        Self::init(1, rng_seed)
+        Self::init(rng_seed)
     }
 
-    fn init(iterations: usize, rnd_seed: u64) -> Self {
+    fn init(rnd_seed: u64) -> Self {
         let mut params = Box::new(Params::default());
 
         let mut rng: DistIter<_, _, f32> =
             SmallRng::seed_from_u64(rnd_seed).sample_iter(StandardNormal);
 
-        let input_layer = 784;
         let hidden_1 = 128;
         let hidden_2 = 64;
         let output_layer = 10;
@@ -101,11 +99,7 @@ impl NeuralNet {
             }
         }
 
-        Self {
-            iterations,
-            learn_rate: 0.001,
-            params,
-        }
+        Self { params }
     }
 
     fn forward_pass(&mut self, image: &[f32; 784]) {
@@ -180,18 +174,17 @@ impl NeuralNet {
         fn update_params<const M: usize, const N: usize>(
             weights: &mut Matrix<f32, M, N>,
             deltas: &Matrix<f32, M, N>,
-            learn_rate: f32,
         ) {
             for (row, row_deltas) in weights.iter_mut().zip(deltas) {
                 for (w, delta) in row.iter_mut().zip(row_deltas) {
-                    *w -= learn_rate * delta;
+                    *w -= LEARN_RATE * delta;
                 }
             }
         }
 
-        update_params(&mut self.params.W1, &changes_to_w.W1, self.learn_rate);
-        update_params(&mut self.params.W2, &changes_to_w.W2, self.learn_rate);
-        update_params(&mut self.params.W3, &changes_to_w.W3, self.learn_rate);
+        update_params(&mut self.params.W1, &changes_to_w.W1);
+        update_params(&mut self.params.W2, &changes_to_w.W2);
+        update_params(&mut self.params.W3, &changes_to_w.W3);
     }
 
     pub fn compute_accuracy(&mut self, images: &[[f32; 784]], labels: &[[f32; 10]]) -> f32 {
@@ -235,7 +228,6 @@ impl NeuralNet {
         }
     }
 
-    /// Only pub for benchmarks.
     pub fn get_params(self) -> Box<Params> {
         self.params
     }
