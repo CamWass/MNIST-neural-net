@@ -3,16 +3,12 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use network::NeuralNet;
+
 use std::fs;
-use std::time::Instant;
 
-use network::*;
-
-// const a: [u8; 100] = [0; 100];
-
-// fn foo<const T: usize, const U: usize>() -> usize {
-//     T * U
-// }
+// TODO: deduplicate with cli
 
 fn parse_labels<const N: usize>(data: &[u8]) -> &[u8] {
     let magic_num_bits = [data[0], data[1], data[2], data[3]];
@@ -37,30 +33,6 @@ fn encode_labels(labels: &[u8]) -> Vec<[f64; 10]> {
         })
         .collect()
 }
-
-// struct ImageData<'a>(&'a [u8]);
-
-// impl<'a> IntoIterator for ImageData<'a> {
-//     type IntoIter = ImageIterator<'a>;
-//     type Item = Image<'a>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         ImageIterator {
-//             inner: self.0.array_chunks(),
-//         }
-//     }
-// }
-
-// struct ImageIterator<'a> {
-//     inner: ArrayChunks<'a, u8, 784>,
-// }
-
-// impl<'a> Iterator for ImageIterator<'a> {
-//     type Item = Image<'a>;
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.inner.next().map(|b| Image(b))
-//     }
-// }
 
 fn parse_images<const N: usize, const S: usize>(data: &[u8]) -> &[[u8; S]] {
     let mut magic_num_bits = [0; 4];
@@ -105,48 +77,39 @@ fn encode_images(images: &[[u8; 784]]) -> Vec<[f64; 784]> {
         .collect()
 }
 
-fn main() {
-    let train_label_data = fs::read("train-labels-idx1-ubyte").unwrap();
-    let train_labels = parse_labels::<60_000>(&train_label_data);
+pub fn bench(c: &mut Criterion) {
+    let train_label_data = include_bytes!("../../../train-labels-idx1-ubyte");
+    let train_labels = &parse_labels::<60_000>(train_label_data)[..10_000];
     assert_eq!(&train_labels[..5], [5, 0, 4, 1, 9]);
     let train_labels = encode_labels(&train_labels);
 
-    let test_label_data = fs::read("t10k-labels-idx1-ubyte").unwrap();
-    let test_labels = parse_labels::<10_000>(&test_label_data);
-    assert_eq!(&test_labels[..5], [7, 2, 1, 0, 4]);
-    let test_labels = encode_labels(&test_labels);
+    // let test_label_data = fs::read("t10k-labels-idx1-ubyte").unwrap();
+    // let test_labels = parse_labels::<10_000>(&test_label_data);
+    // assert_eq!(&test_labels[..5], [7, 2, 1, 0, 4]);
+    // let test_labels = encode_labels(&test_labels);
 
-    let train_image_data = fs::read("train-images-idx3-ubyte").unwrap();
-    let train_images = parse_images::<60_000, 784>(&train_image_data);
+    let train_image_data = include_bytes!("../../../train-images-idx3-ubyte");
+    let train_images = &parse_images::<60_000, 784>(train_image_data)[..10_000];
     let train_images = encode_images(&train_images);
 
-    let test_image_data = fs::read("t10k-images-idx3-ubyte").unwrap();
-    let test_images = parse_images::<10_000, 784>(&test_image_data);
-    let test_images = encode_images(&test_images);
+    // let test_image_data = fs::read("t10k-images-idx3-ubyte").unwrap();
+    // let test_images = parse_images::<10_000, 784>(&test_image_data);
+    // let test_images = encode_images(&test_images);
 
-    let mut network = NeuralNet::new();
+    let mut group = c.benchmark_group("train");
+    group.sample_size(10);
+    group.throughput(Throughput::Elements(train_images.len() as u64));
 
-    let iterations = 5;
+    group.bench_with_input("10k", &(&train_images, &train_labels), |b, input| {
+        b.iter(|| {
+            let mut network = NeuralNet::new_for_bench(black_box(1339));
+            network.train(&train_images, &train_labels);
+            black_box(network.get_params());
+        });
+    });
 
-    let start_time = Instant::now();
-    for iteration in 0..iterations {
-        network.train(&train_images, &train_labels);
-        let accuracy = network.compute_accuracy(&test_images, &test_labels);
-        println!(
-            "Iteration: {}, Time elapsed: {}s, Accuracy: {}%",
-            iteration,
-            start_time.elapsed().as_secs(),
-            accuracy * 100.0
-        );
-    }
+    group.finish();
 }
 
-trait Layer<const I: usize, const O: usize> {
-    fn forwards(&mut self, input: &[u8; I]) -> &[u8; O];
-    fn backwards(&mut self, input: &[u8; O]) -> &[u8; I];
-}
-
-struct InputLayer {}
-
-struct HiddenLayer {}
-struct OutputLayer {}
+criterion_group!(benches, bench);
+criterion_main!(benches);

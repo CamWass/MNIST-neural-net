@@ -2,15 +2,14 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
-use std::time::Instant;
-
-use rand::Rng;
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rand_distr::{DistIter, StandardNormal};
 
 /// An `m` by `n` matrix i.e. `m` rows and `n` columns.
 type Matrix<T, const M: usize, const N: usize> = [[T; N]; M];
 
-struct Params {
+/// Only pub for benchmarks.
+pub struct Params {
     W1: Matrix<f64, 128, 784>,
     W2: Matrix<f64, 64, 128>,
     W3: Matrix<f64, 10, 64>,
@@ -68,11 +67,18 @@ pub struct NeuralNet {
 
 impl NeuralNet {
     pub fn new() -> Self {
+        Self::init(10, rand::thread_rng().gen())
+    }
+
+    pub fn new_for_bench(rng_seed: u64) -> Self {
+        Self::init(1, rng_seed)
+    }
+
+    fn init(iterations: usize, rnd_seed: u64) -> Self {
         let mut params = Box::new(Params::default());
 
-        let mut rng: DistIter<_, _, f64> = rand::thread_rng().sample_iter(StandardNormal);
-
-        // let mut rng = rand::thread_rng();
+        let mut rng: DistIter<_, _, f64> =
+            SmallRng::seed_from_u64(rnd_seed).sample_iter(StandardNormal);
 
         let input_layer = 784;
         let hidden_1 = 128;
@@ -96,10 +102,8 @@ impl NeuralNet {
         }
 
         Self {
-            // iterations: 10,
-            iterations: 2,
+            iterations,
             learn_rate: 0.001,
-            // learn_rate: 0.1,
             params,
         }
     }
@@ -190,7 +194,7 @@ impl NeuralNet {
         update_params(&mut self.params.W3, &changes_to_w.W3, self.learn_rate);
     }
 
-    fn compute_accuracy(&mut self, images: &[[f64; 784]], labels: &[[f64; 10]]) -> f64 {
+    pub fn compute_accuracy(&mut self, images: &[[f64; 784]], labels: &[[f64; 10]]) -> f64 {
         // This function does a forward pass of x, then checks if the indices
         // of the maximum value in the output equals the indices in the label
         // y. Then it sums over each prediction and calculates the accuracy.
@@ -218,44 +222,22 @@ impl NeuralNet {
         correct_predictions as f64 / images.len() as f64
     }
 
-    pub fn train(
-        &mut self,
-        train_images: &[[f64; 784]],
-        train_labels: &[[f64; 10]],
-        test_images: &[[f64; 784]],
-        test_labels: &[[f64; 10]],
-    ) {
-        let start_time = Instant::now();
-        for iteration in 0..self.iterations {
-            // TODO: remove take()
-            for (x, y) in train_images
-                .iter()
-                .take(10_000)
-                .zip(train_labels.iter().take(10_000))
-            {
-                // dbg!(&self.params.W3);
-                // let old = self.params.W3.clone();
-                // let output = self.forward_pass(x);
-                // let changes_to_w = self.backward_pass(y, output);
-                // self.update_network_parameters(changes_to_w);
-                self.forward_pass(x);
-                let changes_to_w = self.backward_pass(y);
-                self.update_network_parameters(&changes_to_w);
-                // dbg!(&self.params.W3);
-                // println!("params changed: {}", old != self.params.W3);
-            }
+    /// Only pub for benchmarks.
+    pub fn train_one(&mut self, train_image: &[f64; 784], train_label: &[f64; 10]) {
+        self.forward_pass(train_image);
+        let changes_to_w = self.backward_pass(train_label);
+        self.update_network_parameters(&changes_to_w);
+    }
 
-            let accuracy = self.compute_accuracy(test_images, test_labels);
-            println!(
-                "Iteration: {}, Time elapsed: {}s, Accuracy: {}%",
-                iteration,
-                start_time.elapsed().as_secs(),
-                accuracy * 100.0
-            );
+    pub fn train(&mut self, train_images: &[[f64; 784]], train_labels: &[[f64; 10]]) {
+        for (x, y) in train_images.iter().zip(train_labels) {
+            self.train_one(x, y);
         }
-        // self.forward_pass(&train_images[0]);
-        // let changes_to_w = self.backward_pass(&train_labels[0]);
-        // self.update_network_parameters(changes_to_w);
+    }
+
+    /// Only pub for benchmarks.
+    pub fn get_params(self) -> Box<Params> {
+        self.params
     }
 }
 
