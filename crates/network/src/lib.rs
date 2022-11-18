@@ -1,3 +1,4 @@
+#![feature(array_chunks)]
 #![allow(non_snake_case)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
@@ -5,13 +6,14 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rand_distr::{DistIter, StandardNormal};
 
-/// An `m` by `n` matrix i.e. `m` rows and `n` columns.
-type Matrix<T, const M: usize, const N: usize> = [[T; N]; M];
+mod util;
+
+use util::Matrix;
 
 pub struct Params {
-    W1: Matrix<f32, 128, 784>,
-    W2: Matrix<f32, 64, 128>,
-    W3: Matrix<f32, 10, 64>,
+    W1: Matrix<f32, 128, 784, 100_352>,
+    W2: Matrix<f32, 64, 128, 8192>,
+    W3: Matrix<f32, 10, 64, 640>,
 
     A0: [f32; 784],
     A1: [f32; 128],
@@ -26,9 +28,9 @@ pub struct Params {
 impl Default for Params {
     fn default() -> Self {
         Self {
-            W1: [[0.0; 784]; 128],
-            W2: [[0.0; 128]; 64],
-            W3: [[0.0; 64]; 10],
+            W1: Matrix::default(),
+            W2: Matrix::default(),
+            W3: Matrix::default(),
 
             A0: [0.0; 784],
             A1: [0.0; 128],
@@ -42,20 +44,11 @@ impl Default for Params {
     }
 }
 
+#[derive(Default)]
 struct WeightDeltas {
-    W1: Matrix<f32, 128, 784>,
-    W2: Matrix<f32, 64, 128>,
-    W3: Matrix<f32, 10, 64>,
-}
-
-impl Default for WeightDeltas {
-    fn default() -> Self {
-        Self {
-            W1: [[0.0; 784]; 128],
-            W2: [[0.0; 128]; 64],
-            W3: [[0.0; 64]; 10],
-        }
-    }
+    W1: Matrix<f32, 128, 784, 100_352>,
+    W2: Matrix<f32, 64, 128, 8192>,
+    W3: Matrix<f32, 10, 64, 640>,
 }
 
 const LEARN_RATE: f32 = 0.001;
@@ -83,20 +76,14 @@ impl NeuralNet {
         let hidden_2 = 64;
         let output_layer = 10;
 
-        for row in &mut params.W1 {
-            for element in row {
-                *element = rng.next().unwrap() * (1.0 / hidden_1 as f32).sqrt();
-            }
+        for element in params.W1.iter_mut() {
+            *element = rng.next().unwrap() * (1.0 / hidden_1 as f32).sqrt();
         }
-        for row in &mut params.W2 {
-            for element in row {
-                *element = rng.next().unwrap() * (1.0 / hidden_2 as f32).sqrt();
-            }
+        for element in params.W2.iter_mut() {
+            *element = rng.next().unwrap() * (1.0 / hidden_2 as f32).sqrt();
         }
-        for row in &mut params.W3 {
-            for element in row {
-                *element = rng.next().unwrap() * (1.0 / output_layer as f32).sqrt();
-            }
+        for element in params.W3.iter_mut() {
+            *element = rng.next().unwrap() * (1.0 / output_layer as f32).sqrt();
         }
 
         Self { params }
@@ -106,7 +93,7 @@ impl NeuralNet {
         // input layer activations becomes sample
         self.params.A0.copy_from_slice(image);
 
-        assert!(self.params.W1.iter().all(|w| w.iter().all(|&w| w <= 1.0)));
+        assert!(self.params.W1.iter().all(|&w| w <= 1.0));
         assert!(self.params.A0.iter().all(|&w| w <= 1.0));
 
         // input layer to hidden layer 1
@@ -141,7 +128,7 @@ impl NeuralNet {
         // Calculate W2 update
 
         let Z2_sigmoid = sigmoid(&self.params.Z2, true);
-        let W3_transpose = transpose(&self.params.W3);
+        let W3_transpose = self.params.W3.transpose();
         let mut error = matrix_multiply(&W3_transpose, &error);
         for (a, b) in error.iter_mut().zip(Z2_sigmoid) {
             *a = *a * b;
@@ -151,7 +138,7 @@ impl NeuralNet {
         // Calculate W1 update
 
         let Z1_sigmoid = sigmoid(&self.params.Z1, true);
-        let W2_transpose = transpose(&self.params.W2);
+        let W2_transpose = self.params.W2.transpose();
         let mut error = matrix_multiply(&W2_transpose, &error);
         for (a, b) in error.iter_mut().zip(Z1_sigmoid) {
             *a = *a * b;
@@ -171,14 +158,12 @@ impl NeuralNet {
         //     gradient ∇J(x, y):  the gradient of the objective function,
         //                         i.e. the change for a specific theta θ
 
-        fn update_params<const M: usize, const N: usize>(
-            weights: &mut Matrix<f32, M, N>,
-            deltas: &Matrix<f32, M, N>,
+        fn update_params<const M: usize, const N: usize, const S: usize>(
+            weights: &mut Matrix<f32, M, N, S>,
+            deltas: &Matrix<f32, M, N, S>,
         ) {
-            for (row, row_deltas) in weights.iter_mut().zip(deltas) {
-                for (w, delta) in row.iter_mut().zip(row_deltas) {
-                    *w -= LEARN_RATE * delta;
-                }
+            for (w, delta) in weights.iter_mut().zip(deltas.iter()) {
+                *w -= LEARN_RATE * delta;
             }
         }
 
@@ -233,37 +218,28 @@ impl NeuralNet {
     }
 }
 
-fn outer_product<const M: usize, const N: usize>(a: &[f32; M], b: &[f32; N]) -> Matrix<f32, M, N> {
-    let mut result = [[0.0; N]; M];
+fn outer_product<const M: usize, const N: usize, const S: usize>(
+    a: &[f32; M],
+    b: &[f32; N],
+) -> Matrix<f32, M, N, S> {
+    let mut result = Matrix::default();
 
     for row in 0..M {
         for col in 0..N {
-            result[row][col] = a[row] * b[col]
+            result.inner[row * N + col] = a[row] * b[col]
         }
     }
 
     result
 }
 
-fn transpose<const M: usize, const N: usize>(matrix: &Matrix<f32, M, N>) -> Matrix<f32, N, M> {
-    let mut transpose = [[0.0; M]; N];
-
-    for row in 0..N {
-        for col in 0..M {
-            transpose[row][col] = matrix[col][row];
-        }
-    }
-
-    transpose
-}
-
-fn matrix_multiply<const M: usize, const N: usize>(
-    a: &Matrix<f32, M, N>,
+fn matrix_multiply<const M: usize, const N: usize, const S: usize>(
+    a: &Matrix<f32, M, N, S>,
     b: &[f32; N],
 ) -> [f32; M] {
     let mut result = [0.0; M];
 
-    for (i, row) in a.iter().enumerate() {
+    for (i, row) in a.rows().enumerate() {
         result[i] = row.iter().zip(b).map(|(a, b)| a * b).sum();
     }
 
