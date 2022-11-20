@@ -2,25 +2,34 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
-use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rand_distr::{DistIter, StandardNormal};
-
 mod util;
 
-use util::Matrix;
+use rand::{rngs::SmallRng, Rng, SeedableRng};
+use rand_distr::{DistIter, StandardNormal};
+use serde::{Deserialize, Serialize};
 
+use util::*;
+
+#[derive(Serialize, Deserialize)]
 pub struct Params {
     W1: Matrix<f32, 128, 784, 100_352>,
     W2: Matrix<f32, 64, 128, 8192>,
     W3: Matrix<f32, 10, 64, 640>,
 
+    #[serde(with = "serde_arrays")]
     A0: [f32; 784],
+    #[serde(with = "serde_arrays")]
     A1: [f32; 128],
+    #[serde(with = "serde_arrays")]
     A2: [f32; 64],
+    #[serde(with = "serde_arrays")]
     A3: [f32; 10],
 
+    #[serde(with = "serde_arrays")]
     Z1: [f32; 128],
+    #[serde(with = "serde_arrays")]
     Z2: [f32; 64],
+    #[serde(with = "serde_arrays")]
     Z3: [f32; 10],
 }
 
@@ -171,11 +180,13 @@ impl NeuralNet {
         update_params(&mut self.params.W3, &changes_to_w.W3);
     }
 
-    pub fn compute_accuracy(&mut self, images: &[[f32; 784]], labels: &[[f32; 10]]) -> f32 {
+    pub fn compute_accuracy(&mut self, images: &[[f32; 784]], labels: &[[f32; 10]]) -> Accuracy {
         // This function does a forward pass of x, then checks if the indices
         // of the maximum value in the output equals the indices in the label
         // y. Then it sums over each prediction and calculates the accuracy.
         let mut correct_predictions = 0;
+
+        let mut per_element = [Guesses::default(); 10];
 
         for (image, label) in images.iter().zip(labels) {
             self.forward_pass(image);
@@ -185,18 +196,26 @@ impl NeuralNet {
                 .iter()
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.total_cmp(b))
-                .map(|(index, _)| index);
+                .map(|(index, _)| index)
+                .unwrap();
             let target = label
                 .iter()
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.total_cmp(b))
-                .map(|(index, _)| index);
+                .map(|(index, _)| index)
+                .unwrap();
+
+            per_element[target].total += 1;
             if pred == target {
                 correct_predictions += 1;
+                per_element[target].correct += 1;
             }
         }
 
-        correct_predictions as f32 / images.len() as f32
+        Accuracy {
+            overall: Guesses::new(images.len(), correct_predictions),
+            per_element,
+        }
     }
 
     /// Only pub for benchmarks.
@@ -212,9 +231,36 @@ impl NeuralNet {
         }
     }
 
+    pub fn from_params(params: Box<Params>) -> Self {
+        Self { params }
+    }
+
     pub fn get_params(self) -> Box<Params> {
         self.params
     }
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct Guesses {
+    pub total: usize,
+    pub correct: usize,
+}
+
+impl Guesses {
+    fn new(total: usize, correct: usize) -> Self {
+        Self { total, correct }
+    }
+    pub fn percent_correct(&self) -> f32 {
+        self.correct as f32 / self.total as f32 * 100.0
+    }
+}
+
+#[derive(Default)]
+pub struct Accuracy {
+    /// Percent of correct guesses.
+    pub overall: Guesses,
+    /// Percent of correct guesses vs total occurances for each label type.
+    pub per_element: [Guesses; 10],
 }
 
 fn outer_product<const M: usize, const N: usize, const S: usize>(

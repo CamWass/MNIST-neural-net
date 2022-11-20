@@ -5,6 +5,8 @@
 use std::fs;
 use std::time::Instant;
 
+use postcard::to_allocvec;
+
 use network::*;
 
 // const a: [u8; 100] = [0; 100];
@@ -141,21 +143,52 @@ fn main() {
     let test_images = parse_images::<10_000, 784>(&test_image_data);
     let test_images = encode_images(&test_images);
 
+    println!("Loaded training data");
+
     let mut network = NeuralNet::new();
 
-    const ITERATIONS: u8 = 100;
+    const ITERATIONS: u8 = 30;
+
+    let mut accuracy = Accuracy::default();
 
     let start_time = Instant::now();
     for iteration in 0..ITERATIONS {
         network.train(&train_images, &train_labels);
-        let accuracy = network.compute_accuracy(&test_images, &test_labels);
+        accuracy = network.compute_accuracy(&test_images, &test_labels);
         println!(
-            "Iteration: {}, Time elapsed: {}s, Accuracy: {}%",
+            "Iteration: {}, Time elapsed: {}s, Accuracy: {}% ({}/{})",
             iteration,
             start_time.elapsed().as_secs(),
-            accuracy * 100.0
+            accuracy.overall.percent_correct(),
+            accuracy.overall.correct,
+            accuracy.overall.total
         );
     }
+
+    println!("Finished training");
+    println!("Accuracy per element:");
+    for (i, guesses) in accuracy.per_element.iter().enumerate() {
+        println!(
+            "  {}: {:.2}% ({}/{})",
+            i,
+            guesses.percent_correct(),
+            guesses.correct,
+            guesses.total
+        );
+    }
+
+    let params = network.get_params();
+
+    let params = to_allocvec(&params).unwrap();
+
+    fs::write(
+        format!(
+            "pretrained/pretrained-params-{}",
+            accuracy.overall.percent_correct().round() as usize
+        ),
+        params,
+    )
+    .unwrap();
 }
 
 trait Layer<const I: usize, const O: usize> {
