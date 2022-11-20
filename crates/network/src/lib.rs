@@ -1,7 +1,3 @@
-#![allow(non_snake_case)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 mod util;
 
 use rand::{rngs::SmallRng, Rng, SeedableRng};
@@ -12,51 +8,51 @@ use util::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Params {
-    W1: Matrix<f32, 128, 784, 100_352>,
-    W2: Matrix<f32, 64, 128, 8192>,
-    W3: Matrix<f32, 10, 64, 640>,
+    w1: Matrix<f32, 128, 784, 100_352>,
+    w2: Matrix<f32, 64, 128, 8192>,
+    w3: Matrix<f32, 10, 64, 640>,
 
     #[serde(with = "serde_arrays")]
-    A0: [f32; 784],
+    a0: [f32; 784],
     #[serde(with = "serde_arrays")]
-    A1: [f32; 128],
+    a1: [f32; 128],
     #[serde(with = "serde_arrays")]
-    A2: [f32; 64],
+    a2: [f32; 64],
     #[serde(with = "serde_arrays")]
-    A3: [f32; 10],
+    a3: [f32; 10],
 
     #[serde(with = "serde_arrays")]
-    Z1: [f32; 128],
+    z1: [f32; 128],
     #[serde(with = "serde_arrays")]
-    Z2: [f32; 64],
+    z2: [f32; 64],
     #[serde(with = "serde_arrays")]
-    Z3: [f32; 10],
+    z3: [f32; 10],
 }
 
 impl Default for Params {
     fn default() -> Self {
         Self {
-            W1: Matrix::default(),
-            W2: Matrix::default(),
-            W3: Matrix::default(),
+            w1: Matrix::default(),
+            w2: Matrix::default(),
+            w3: Matrix::default(),
 
-            A0: [0.0; 784],
-            A1: [0.0; 128],
-            A2: [0.0; 64],
-            A3: [0.0; 10],
+            a0: [0.0; 784],
+            a1: [0.0; 128],
+            a2: [0.0; 64],
+            a3: [0.0; 10],
 
-            Z1: [0.0; 128],
-            Z2: [0.0; 64],
-            Z3: [0.0; 10],
+            z1: [0.0; 128],
+            z2: [0.0; 64],
+            z3: [0.0; 10],
         }
     }
 }
 
 #[derive(Default)]
 struct WeightDeltas {
-    W1: Matrix<f32, 128, 784, 100_352>,
-    W2: Matrix<f32, 64, 128, 8192>,
-    W3: Matrix<f32, 10, 64, 640>,
+    w1: Matrix<f32, 128, 784, 100_352>,
+    w2: Matrix<f32, 64, 128, 8192>,
+    w3: Matrix<f32, 10, 64, 640>,
 }
 
 const LEARN_RATE: f32 = 0.001;
@@ -84,13 +80,13 @@ impl NeuralNet {
         let hidden_2 = 64;
         let output_layer = 10;
 
-        for element in params.W1.iter_mut() {
+        for element in params.w1.iter_mut() {
             *element = rng.next().unwrap() * (1.0 / hidden_1 as f32).sqrt();
         }
-        for element in params.W2.iter_mut() {
+        for element in params.w2.iter_mut() {
             *element = rng.next().unwrap() * (1.0 / hidden_2 as f32).sqrt();
         }
-        for element in params.W3.iter_mut() {
+        for element in params.w3.iter_mut() {
             *element = rng.next().unwrap() * (1.0 / output_layer as f32).sqrt();
         }
 
@@ -99,59 +95,59 @@ impl NeuralNet {
 
     fn forward_pass(&mut self, image: &[f32; 784]) {
         // input layer activations becomes sample
-        self.params.A0.copy_from_slice(image);
+        self.params.a0.copy_from_slice(image);
 
-        assert!(self.params.W1.iter().all(|&w| w <= 1.0));
-        assert!(self.params.A0.iter().all(|&w| w <= 1.0));
+        assert!(self.params.w1.iter().all(|&w| w <= 1.0));
+        assert!(self.params.a0.iter().all(|&w| w <= 1.0));
 
         // input layer to hidden layer 1
-        self.params.Z1 = matrix_multiply(&self.params.W1, &self.params.A0);
-        self.params.A1 = sigmoid(&self.params.Z1, false);
+        self.params.z1 = matrix_multiply(&self.params.w1, &self.params.a0);
+        self.params.a1 = sigmoid(&self.params.z1, false);
 
         // hidden layer 1 to hidden layer 2
-        self.params.Z2 = matrix_multiply(&self.params.W2, &self.params.A1);
-        self.params.A2 = sigmoid(&self.params.Z2, false);
+        self.params.z2 = matrix_multiply(&self.params.w2, &self.params.a1);
+        self.params.a2 = sigmoid(&self.params.z2, false);
 
         // hidden layer 2 to output layer
-        self.params.Z3 = matrix_multiply(&self.params.W3, &self.params.A2);
-        self.params.A3 = softmax(&self.params.Z3, false);
+        self.params.z3 = matrix_multiply(&self.params.w3, &self.params.a2);
+        self.params.a3 = softmax(&self.params.z3, false);
     }
 
     fn backward_pass(&mut self, target: &[f32; 10]) -> Box<WeightDeltas> {
         // This is the backpropagation algorithm, for calculating the updates
         // of the neural network's parameters.
 
-        let output = &self.params.A3;
+        let output = &self.params.a3;
 
         let mut change_w = Box::new(WeightDeltas::default());
 
         // Calculate W3 update
 
-        let mut error = softmax(&self.params.Z3, true);
+        let mut error = softmax(&self.params.z3, true);
         for ((error, output), target) in error.iter_mut().zip(output).zip(target) {
             *error = 2.0 * (output - target) / 10.0 * *error
         }
-        change_w.W3 = outer_product(&error, &self.params.A2);
+        change_w.w3 = outer_product(&error, &self.params.a2);
 
         // Calculate W2 update
 
-        let Z2_sigmoid = sigmoid(&self.params.Z2, true);
-        let W3_transpose = self.params.W3.transpose();
-        let mut error = matrix_multiply(&W3_transpose, &error);
-        for (a, b) in error.iter_mut().zip(Z2_sigmoid) {
+        let z2_sigmoid = sigmoid(&self.params.z2, true);
+        let w3_transpose = self.params.w3.transpose();
+        let mut error = matrix_multiply(&w3_transpose, &error);
+        for (a, b) in error.iter_mut().zip(z2_sigmoid) {
             *a = *a * b;
         }
-        change_w.W2 = outer_product(&error, &self.params.A1);
+        change_w.w2 = outer_product(&error, &self.params.a1);
 
         // Calculate W1 update
 
-        let Z1_sigmoid = sigmoid(&self.params.Z1, true);
-        let W2_transpose = self.params.W2.transpose();
-        let mut error = matrix_multiply(&W2_transpose, &error);
-        for (a, b) in error.iter_mut().zip(Z1_sigmoid) {
+        let z1_sigmoid = sigmoid(&self.params.z1, true);
+        let w2_transpose = self.params.w2.transpose();
+        let mut error = matrix_multiply(&w2_transpose, &error);
+        for (a, b) in error.iter_mut().zip(z1_sigmoid) {
             *a = *a * b;
         }
-        change_w.W1 = outer_product(&error, &self.params.A0);
+        change_w.w1 = outer_product(&error, &self.params.a0);
 
         change_w
     }
@@ -175,9 +171,9 @@ impl NeuralNet {
             }
         }
 
-        update_params(&mut self.params.W1, &changes_to_w.W1);
-        update_params(&mut self.params.W2, &changes_to_w.W2);
-        update_params(&mut self.params.W3, &changes_to_w.W3);
+        update_params(&mut self.params.w1, &changes_to_w.w1);
+        update_params(&mut self.params.w2, &changes_to_w.w2);
+        update_params(&mut self.params.w3, &changes_to_w.w3);
     }
 
     pub fn compute_accuracy(&mut self, images: &[[f32; 784]], labels: &[[f32; 10]]) -> Accuracy {
@@ -192,7 +188,7 @@ impl NeuralNet {
             self.forward_pass(image);
             let pred = self
                 .params
-                .A3
+                .a3
                 .iter()
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.total_cmp(b))
@@ -235,7 +231,7 @@ impl NeuralNet {
         self.forward_pass(image);
         let prediction = self
             .params
-            .A3
+            .a3
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.total_cmp(b))
@@ -336,25 +332,3 @@ fn softmax<const N: usize>(x: &[f32; N], derivative: bool) -> [f32; N] {
     }
     result
 }
-
-// pub struct NeuralNetBuilder {}
-
-// impl NeuralNetBuilder {
-//     pub fn new() -> Self {
-//         todo!();
-//     }
-
-//     pub fn input_layer(self) -> Self {
-//         todo!();
-//     }
-//     pub fn hidden_layer(self) -> Self {
-//         todo!();
-//     }
-//     pub fn output_layer(self) -> Self {
-//         todo!();
-//     }
-
-//     pub fn build(self) -> NeuralNet {
-//         todo!();
-//     }
-// }

@@ -127,6 +127,7 @@ dependencies = [
 name = "cli"
 version = "0.1.0"
 dependencies = [
+ "data",
  "network",
  "postcard",
 ]
@@ -271,6 +272,10 @@ checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "data"
+version = "0.1.0"
 
 [[package]]
 name = "either"
@@ -447,6 +452,7 @@ name = "network"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "data",
  "rand",
  "rand_distr",
  "serde",
@@ -872,13 +878,12 @@ name = "wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "data",
  "getrandom",
- "js-sys",
  "network",
  "postcard",
  "wasm-bindgen",
  "wasm-bindgen-test",
- "web-sys",
  "wee_alloc",
 ]
 
