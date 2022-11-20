@@ -1,4 +1,3 @@
-#![feature(array_chunks)]
 #![allow(non_snake_case)]
 #![allow(unused_variables)]
 #![allow(dead_code)]

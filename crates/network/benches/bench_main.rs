@@ -1,4 +1,3 @@
-#![feature(slice_as_chunks)]
 #![allow(non_snake_case)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
@@ -34,6 +33,24 @@ fn encode_labels(labels: &[u8]) -> Vec<[f32; 10]> {
         .collect()
 }
 
+fn as_chunks<T, const N: usize>(slice: &[T]) -> (&[[T; N]], &[T]) {
+    assert_ne!(N, 0);
+    let len = slice.len() / N;
+    let (multiple_of_n, remainder) = slice.split_at(len * N);
+    // SAFETY: We already panicked for zero, and ensured by construction
+    // that the length of the subslice is a multiple of N.
+    let array_slice = unsafe {
+        // Inlined `as_chunks_unchecked` from nightly std
+
+        // SAFETY: Caller must guarantee that `N` is nonzero and exactly divides the slice length
+        let new_len = len;
+        // SAFETY: We cast a slice of `new_len * N` elements into
+        // a slice of `new_len` many `N` elements chunks.
+        std::slice::from_raw_parts(multiple_of_n.as_ptr().cast(), new_len)
+    };
+    (array_slice, remainder)
+}
+
 fn parse_images<const N: usize, const S: usize>(data: &[u8]) -> &[[u8; S]] {
     let mut magic_num_bits = [0; 4];
     magic_num_bits.copy_from_slice(&data[..4]);
@@ -55,7 +72,7 @@ fn parse_images<const N: usize, const S: usize>(data: &[u8]) -> &[[u8; S]] {
     let num_of_columns = u32::from_be_bytes(num_of_columns_bits);
     assert!(num_of_columns == 28);
 
-    let image_data = &data[16..].as_chunks();
+    let image_data = as_chunks(&data[16..]);
     assert!(image_data.1.len() == 0);
     let image_data = image_data.0;
     assert_eq!(N, image_data.len());

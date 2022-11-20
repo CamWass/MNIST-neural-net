@@ -20,8 +20,8 @@ where
         self.inner.iter_mut()
     }
 
-    pub fn rows(&self) -> impl Iterator<Item = &[T; N]> {
-        self.inner.array_chunks()
+    pub fn rows(&self) -> impl Iterator<Item = &[T]> {
+        self.inner.chunks_exact(N)
     }
 
     pub fn transpose(&self) -> Matrix<T, N, M, S> {
