@@ -231,6 +231,19 @@ impl NeuralNet {
         }
     }
 
+    pub fn classify(&mut self, image: &[f32; 784]) -> u8 {
+        self.forward_pass(image);
+        let prediction = self
+            .params
+            .A3
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(index, _)| index)
+            .unwrap() as u8;
+        prediction
+    }
+
     pub fn from_params(params: Box<Params>) -> Self {
         Self { params }
     }
