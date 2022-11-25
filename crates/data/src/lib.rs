@@ -1,29 +1,26 @@
-use std::fs;
-
-// TODO: investigate loading training data at compile time using include_bytes!()
+static TRAIN_IMAGE_DATA: &[u8] = include_bytes!("../../../train-images-idx3-ubyte");
+static TEST_IMAGE_DATA: &[u8] = include_bytes!("../../../t10k-images-idx3-ubyte");
+static TRAIN_LABEL_DATA: &[u8] = include_bytes!("../../../train-labels-idx1-ubyte");
+static TEST_LABEL_DATA: &[u8] = include_bytes!("../../../t10k-labels-idx1-ubyte");
 
 pub fn get_train_images() -> Vec<[f32; 784]> {
-    let train_image_data = fs::read("train-images-idx3-ubyte").unwrap();
-    let train_images = parse_images::<60_000, 784>(&train_image_data);
+    let train_images = parse_images::<60_000, 784>(&TRAIN_IMAGE_DATA);
     encode_images(&train_images)
 }
 
 pub fn get_test_images() -> Vec<[f32; 784]> {
-    let test_image_data = fs::read("t10k-images-idx3-ubyte").unwrap();
-    let test_images = parse_images::<10_000, 784>(&test_image_data);
+    let test_images = parse_images::<10_000, 784>(&TEST_IMAGE_DATA);
     encode_images(&test_images)
 }
 
 pub fn get_train_labels() -> Vec<[f32; 10]> {
-    let train_label_data = fs::read("train-labels-idx1-ubyte").unwrap();
-    let train_labels = parse_labels::<60_000>(&train_label_data);
+    let train_labels = parse_labels::<60_000>(&TRAIN_LABEL_DATA);
     assert_eq!(&train_labels[..5], [5, 0, 4, 1, 9]);
     encode_labels(&train_labels)
 }
 
 pub fn get_test_labels() -> Vec<[f32; 10]> {
-    let test_label_data = fs::read("t10k-labels-idx1-ubyte").unwrap();
-    let test_labels = parse_labels::<10_000>(&test_label_data);
+    let test_labels = parse_labels::<10_000>(&TEST_LABEL_DATA);
     assert_eq!(&test_labels[..5], [7, 2, 1, 0, 4]);
     encode_labels(&test_labels)
 }

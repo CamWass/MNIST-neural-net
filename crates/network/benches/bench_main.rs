@@ -8,7 +8,7 @@ pub fn bench(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("train");
     group.sample_size(10);
-    group.throughput(Throughput::Elements(train_images.len() as u64));
+    group.throughput(Throughput::Elements(10_000));
 
     let input = (&train_images[..10_000], &train_labels[..10_000]);
     group.bench_with_input("10k", &input, |b, (train_images, train_labels)| {
