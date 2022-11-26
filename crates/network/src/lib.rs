@@ -59,6 +59,7 @@ const LEARN_RATE: f32 = 0.001;
 
 pub struct NeuralNet {
     params: Box<Params>,
+    weight_deltas: Box<WeightDeltas>,
 }
 
 impl NeuralNet {
@@ -90,7 +91,7 @@ impl NeuralNet {
             *element = rng.next().unwrap() * (1.0 / output_layer as f32).sqrt();
         }
 
-        Self { params }
+        Self::from_params(params)
     }
 
     fn forward_pass(&mut self, image: &[f32; 784]) {
@@ -101,25 +102,23 @@ impl NeuralNet {
         assert!(self.params.a0.iter().all(|&w| w <= 1.0));
 
         // input layer to hidden layer 1
-        self.params.z1 = matrix_multiply(&self.params.w1, &self.params.a0);
+        self.params.z1 = self.params.w1.multiply_by(&self.params.a0);
         self.params.a1 = sigmoid(&self.params.z1, false);
 
         // hidden layer 1 to hidden layer 2
-        self.params.z2 = matrix_multiply(&self.params.w2, &self.params.a1);
+        self.params.z2 = self.params.w2.multiply_by(&self.params.a1);
         self.params.a2 = sigmoid(&self.params.z2, false);
 
         // hidden layer 2 to output layer
-        self.params.z3 = matrix_multiply(&self.params.w3, &self.params.a2);
+        self.params.z3 = self.params.w3.multiply_by(&self.params.a2);
         self.params.a3 = softmax(&self.params.z3, false);
     }
 
-    fn backward_pass(&mut self, target: &[f32; 10]) -> Box<WeightDeltas> {
+    fn backward_pass(&mut self, target: &[f32; 10]) {
         // This is the backpropagation algorithm, for calculating the updates
         // of the neural network's parameters.
 
         let output = &self.params.a3;
-
-        let mut change_w = Box::new(WeightDeltas::default());
 
         // Calculate W3 update
 
@@ -127,32 +126,30 @@ impl NeuralNet {
         for ((error, output), target) in error.iter_mut().zip(output).zip(target) {
             *error = 2.0 * (output - target) / 10.0 * *error
         }
-        change_w.w3 = outer_product(&error, &self.params.a2);
+        outer_product(&mut self.weight_deltas.w3, &error, &self.params.a2);
 
         // Calculate W2 update
 
         let z2_sigmoid = sigmoid(&self.params.z2, true);
         let w3_transpose = self.params.w3.transpose();
-        let mut error = matrix_multiply(&w3_transpose, &error);
+        let mut error = w3_transpose.multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z2_sigmoid) {
             *a = *a * b;
         }
-        change_w.w2 = outer_product(&error, &self.params.a1);
+        outer_product(&mut self.weight_deltas.w2, &error, &self.params.a1);
 
         // Calculate W1 update
 
         let z1_sigmoid = sigmoid(&self.params.z1, true);
         let w2_transpose = self.params.w2.transpose();
-        let mut error = matrix_multiply(&w2_transpose, &error);
+        let mut error = w2_transpose.multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z1_sigmoid) {
             *a = *a * b;
         }
-        change_w.w1 = outer_product(&error, &self.params.a0);
-
-        change_w
+        outer_product(&mut self.weight_deltas.w1, &error, &self.params.a0);
     }
 
-    fn update_network_parameters(&mut self, changes_to_w: &WeightDeltas) {
+    fn update_network_parameters(&mut self) {
         // Update network parameters according to update rule from
         // Stochastic Gradient Descent.
         //
@@ -171,9 +168,9 @@ impl NeuralNet {
             }
         }
 
-        update_params(&mut self.params.w1, &changes_to_w.w1);
-        update_params(&mut self.params.w2, &changes_to_w.w2);
-        update_params(&mut self.params.w3, &changes_to_w.w3);
+        update_params(&mut self.params.w1, &self.weight_deltas.w1);
+        update_params(&mut self.params.w2, &self.weight_deltas.w2);
+        update_params(&mut self.params.w3, &self.weight_deltas.w3);
     }
 
     pub fn compute_accuracy(&mut self, images: &[[f32; 784]], labels: &[[f32; 10]]) -> Accuracy {
@@ -217,8 +214,8 @@ impl NeuralNet {
     /// Only pub for benchmarks.
     pub fn train_one(&mut self, train_image: &[f32; 784], train_label: &[f32; 10]) {
         self.forward_pass(train_image);
-        let changes_to_w = self.backward_pass(train_label);
-        self.update_network_parameters(&changes_to_w);
+        self.backward_pass(train_label);
+        self.update_network_parameters();
     }
 
     pub fn train(&mut self, train_images: &[[f32; 784]], train_labels: &[[f32; 10]]) {
@@ -241,7 +238,10 @@ impl NeuralNet {
     }
 
     pub fn from_params(params: Box<Params>) -> Self {
-        Self { params }
+        Self {
+            params,
+            weight_deltas: Box::new(WeightDeltas::default()),
+        }
     }
 
     pub fn get_params(self) -> Box<Params> {
@@ -273,31 +273,15 @@ pub struct Accuracy {
 }
 
 fn outer_product<const M: usize, const N: usize, const S: usize>(
+    output: &mut Matrix<f32, M, N, S>,
     a: &[f32; M],
     b: &[f32; N],
-) -> Matrix<f32, M, N, S> {
-    let mut result = Matrix::default();
-
+) {
     for row in 0..M {
         for col in 0..N {
-            result.inner[row * N + col] = a[row] * b[col]
+            output.inner[row * N + col] = a[row] * b[col]
         }
     }
-
-    result
-}
-
-fn matrix_multiply<const M: usize, const N: usize, const S: usize>(
-    a: &Matrix<f32, M, N, S>,
-    b: &[f32; N],
-) -> [f32; M] {
-    let mut result = [0.0; M];
-
-    for (i, row) in a.rows().enumerate() {
-        result[i] = row.iter().zip(b).map(|(a, b)| a * b).sum();
-    }
-
-    result
 }
 
 fn sigmoid<const N: usize>(x: &[f32; N], derivative: bool) -> [f32; N] {

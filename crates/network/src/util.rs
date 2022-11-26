@@ -65,10 +65,7 @@ pub struct Matrix<T, const M: usize, const N: usize, const S: usize> {
     _height: PhantomData<[u8; M]>,
 }
 
-impl<T, const M: usize, const N: usize, const S: usize> Matrix<T, M, N, S>
-where
-    T: Default + Copy + Serialize,
-{
+impl<T, const M: usize, const N: usize, const S: usize> Matrix<T, M, N, S> {
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.inner.iter()
     }
@@ -81,22 +78,8 @@ where
         self.inner.chunks_exact(N)
     }
 
-    pub fn transpose(&self) -> Matrix<T, N, M, S> {
-        let mut transpose = Matrix::default();
-
-        fn index(row: usize, col: usize, num_cols: usize) -> usize {
-            row * num_cols + col
-        }
-
-        for row in 0..N {
-            for col in 0..M {
-                let new_index = index(row, col, M);
-                let old_index = index(col, row, N);
-                transpose.inner[new_index] = self.inner[old_index];
-            }
-        }
-
-        transpose
+    pub fn transpose(&self) -> TransposedMatrix<T, N, M, S> {
+        TransposedMatrix { inner: self }
     }
 }
 
@@ -120,5 +103,45 @@ where
             _width: PhantomData,
             _height: PhantomData,
         }
+    }
+}
+
+pub struct TransposedMatrix<'a, T, const M: usize, const N: usize, const S: usize> {
+    inner: &'a Matrix<T, N, M, S>,
+}
+
+pub trait MatrixMultiply<T, const M: usize, const N: usize> {
+    fn multiply_by(&self, other: &[T; N]) -> [T; M];
+}
+
+impl<const M: usize, const N: usize, const S: usize> MatrixMultiply<f32, M, N>
+    for Matrix<f32, M, N, S>
+{
+    fn multiply_by(&self, other: &[f32; N]) -> [f32; M] {
+        let mut result = [0.0; M];
+
+        for (i, row) in self.rows().enumerate() {
+            result[i] = row.iter().zip(other).map(|(a, b)| a * b).sum();
+        }
+
+        result
+    }
+}
+
+impl<'a, const M: usize, const N: usize, const S: usize> MatrixMultiply<f32, M, N>
+    for TransposedMatrix<'a, f32, M, N, S>
+{
+    fn multiply_by(&self, other: &[f32; N]) -> [f32; M] {
+        let mut result = [0.0; M];
+
+        for col in 0..M {
+            let mut r = 0.0;
+            for row in 0..N {
+                r += self.inner.inner[row * M + col] * other[row];
+            }
+            result[col] = r;
+        }
+
+        result
     }
 }
