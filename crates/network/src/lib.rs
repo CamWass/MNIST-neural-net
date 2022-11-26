@@ -98,9 +98,6 @@ impl NeuralNet {
         // input layer activations becomes sample
         self.params.a0.copy_from_slice(image);
 
-        assert!(self.params.w1.iter().all(|&w| w <= 1.0));
-        assert!(self.params.a0.iter().all(|&w| w <= 1.0));
-
         // input layer to hidden layer 1
         self.params.z1 = self.params.w1.multiply_by(&self.params.a0);
         self.params.a1 = sigmoid(&self.params.z1, false);

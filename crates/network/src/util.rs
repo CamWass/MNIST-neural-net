@@ -97,7 +97,7 @@ where
     T: Default + Copy + Serialize,
 {
     fn default() -> Self {
-        assert_eq!(M * N, S);
+        debug_assert_eq!(M * N, S);
         Self {
             inner: vec_to_boxed_array(T::default()),
             _width: PhantomData,

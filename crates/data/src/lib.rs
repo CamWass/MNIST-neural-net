@@ -15,24 +15,24 @@ pub fn get_test_images() -> Vec<[f32; 784]> {
 
 pub fn get_train_labels() -> Vec<[f32; 10]> {
     let train_labels = parse_labels::<60_000>(&TRAIN_LABEL_DATA);
-    assert_eq!(&train_labels[..5], [5, 0, 4, 1, 9]);
+    debug_assert_eq!(&train_labels[..5], [5, 0, 4, 1, 9]);
     encode_labels(&train_labels)
 }
 
 pub fn get_test_labels() -> Vec<[f32; 10]> {
     let test_labels = parse_labels::<10_000>(&TEST_LABEL_DATA);
-    assert_eq!(&test_labels[..5], [7, 2, 1, 0, 4]);
+    debug_assert_eq!(&test_labels[..5], [7, 2, 1, 0, 4]);
     encode_labels(&test_labels)
 }
 
 fn parse_labels<const N: usize>(data: &[u8]) -> &[u8] {
     let magic_num_bits = [data[0], data[1], data[2], data[3]];
     let magic_num = u32::from_be_bytes(magic_num_bits);
-    assert!(magic_num == 2049);
+    debug_assert!(magic_num == 2049);
 
     let num_of_labels_bits = [data[4], data[5], data[6], data[7]];
     let num_of_labels = u32::from_be_bytes(num_of_labels_bits);
-    assert!(num_of_labels as usize == N);
+    debug_assert!(num_of_labels as usize == N);
 
     &data[8..]
 }
@@ -41,7 +41,7 @@ fn encode_labels(labels: &[u8]) -> Vec<[f32; 10]> {
     labels
         .iter()
         .map(|&l| {
-            assert!(l <= 9);
+            debug_assert!(l <= 9);
             let mut a = [0.0; 10];
             a[l as usize] = 1.0;
             a
@@ -53,28 +53,28 @@ fn parse_images<const N: usize, const S: usize>(data: &[u8]) -> &[[u8; S]] {
     let mut magic_num_bits = [0; 4];
     magic_num_bits.copy_from_slice(&data[..4]);
     let magic_num = u32::from_be_bytes(magic_num_bits);
-    assert!(magic_num == 2051);
+    debug_assert!(magic_num == 2051);
 
     let mut num_of_images_bits = [0; 4];
     num_of_images_bits.copy_from_slice(&data[4..8]);
     let num_of_images = u32::from_be_bytes(num_of_images_bits);
-    assert!(num_of_images as usize == N);
+    debug_assert!(num_of_images as usize == N);
 
     let mut num_of_rows_bits = [0; 4];
     num_of_rows_bits.copy_from_slice(&data[8..12]);
     let num_of_rows = u32::from_be_bytes(num_of_rows_bits);
-    assert!(num_of_rows == 28);
+    debug_assert!(num_of_rows == 28);
 
     let mut num_of_columns_bits = [0; 4];
     num_of_columns_bits.copy_from_slice(&data[12..16]);
     let num_of_columns = u32::from_be_bytes(num_of_columns_bits);
-    assert!(num_of_columns == 28);
+    debug_assert!(num_of_columns == 28);
 
     let image_data = as_chunks(&data[16..]);
-    assert!(image_data.1.len() == 0);
+    debug_assert!(image_data.1.len() == 0);
     let image_data = image_data.0;
-    assert_eq!(N, image_data.len());
-    assert_eq!(S, image_data[0].len());
+    debug_assert_eq!(N, image_data.len());
+    debug_assert_eq!(S, image_data[0].len());
 
     image_data
 }
