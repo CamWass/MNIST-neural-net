@@ -15,7 +15,7 @@ pub fn bench(c: &mut Criterion) {
         b.iter(|| {
             let mut network = NeuralNet::new_for_bench(black_box(1339));
             network.train(train_images, train_labels);
-            black_box(network.get_params());
+            black_box(network.into_state());
         });
     });
 

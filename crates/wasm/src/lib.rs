@@ -1,5 +1,5 @@
 use data::{as_chunks, encode_image};
-use network::{NeuralNet as NN, Params};
+use network::{NeuralNet as NN, State};
 
 use postcard::from_bytes;
 use wasm_bindgen::prelude::*;
@@ -9,11 +9,11 @@ use wasm_bindgen::prelude::*;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-static RAW_PARAMS: &[u8] = include_bytes!("../../../pretrained/pretrained-params-81");
+static RAW_STATE: &[u8] = include_bytes!("../../../pretrained/pretrained-96");
 
 fn make_neural_net() -> NN {
-    let params: Box<Params> = from_bytes(RAW_PARAMS).unwrap();
-    NN::from_params(params)
+    let state: State = from_bytes(RAW_STATE).unwrap();
+    NN::restore_from_state(state)
 }
 
 #[wasm_bindgen]

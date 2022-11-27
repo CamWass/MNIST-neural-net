@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use util::*;
 
 #[derive(Serialize, Deserialize)]
-pub struct Params {
+struct Params {
     w1: Matrix<f32, 128, 784, 100_352>,
     w2: Matrix<f32, 64, 128, 8192>,
     w3: Matrix<f32, 10, 64, 640>,
@@ -55,9 +55,16 @@ struct WeightDeltas {
     w3: Matrix<f32, 10, 64, 640>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct State {
+    activation_fn: ActivationFunction,
+    params: Box<Params>,
+}
+
 const LEARN_RATE: f32 = 0.001;
 
 pub struct NeuralNet {
+    activation_fn: ActivationFunction,
     params: Box<Params>,
     weight_deltas: Box<WeightDeltas>,
 }
@@ -91,7 +98,11 @@ impl NeuralNet {
             *element = rng.next().unwrap() * (1.0 / output_layer as f32).sqrt();
         }
 
-        Self::from_params(params)
+        Self {
+            activation_fn: ActivationFunction::RectifiedLinearUnit,
+            params,
+            weight_deltas: Box::new(WeightDeltas::default()),
+        }
     }
 
     fn forward_pass(&mut self, image: &[f32; 784]) {
@@ -100,11 +111,11 @@ impl NeuralNet {
 
         // input layer to hidden layer 1
         self.params.z1 = self.params.w1.multiply_by(&self.params.a0);
-        self.params.a1 = sigmoid(&self.params.z1, false);
+        self.params.a1 = self.call_activation_fn(&self.params.z1, false);
 
         // hidden layer 1 to hidden layer 2
         self.params.z2 = self.params.w2.multiply_by(&self.params.a1);
-        self.params.a2 = sigmoid(&self.params.z2, false);
+        self.params.a2 = self.call_activation_fn(&self.params.z2, false);
 
         // hidden layer 2 to output layer
         self.params.z3 = self.params.w3.multiply_by(&self.params.a2);
@@ -127,7 +138,7 @@ impl NeuralNet {
 
         // Calculate W2 update
 
-        let z2_sigmoid = sigmoid(&self.params.z2, true);
+        let z2_sigmoid = self.call_activation_fn(&self.params.z2, true);
         let w3_transpose = self.params.w3.transpose();
         let mut error = w3_transpose.multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z2_sigmoid) {
@@ -137,13 +148,20 @@ impl NeuralNet {
 
         // Calculate W1 update
 
-        let z1_sigmoid = sigmoid(&self.params.z1, true);
+        let z1_sigmoid = self.call_activation_fn(&self.params.z1, true);
         let w2_transpose = self.params.w2.transpose();
         let mut error = w2_transpose.multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z1_sigmoid) {
             *a = *a * b;
         }
         outer_product(&mut self.weight_deltas.w1, &error, &self.params.a0);
+    }
+
+    fn call_activation_fn<const N: usize>(&self, x: &[f32; N], derivative: bool) -> [f32; N] {
+        match self.activation_fn {
+            ActivationFunction::Sigmoid => sigmoid(x, derivative),
+            ActivationFunction::RectifiedLinearUnit => rectified_linear_unit(x, derivative),
+        }
     }
 
     fn update_network_parameters(&mut self) {
@@ -234,15 +252,23 @@ impl NeuralNet {
         prediction
     }
 
-    pub fn from_params(params: Box<Params>) -> Self {
+    pub fn restore_from_state(state: State) -> Self {
         Self {
-            params,
+            activation_fn: state.activation_fn,
+            params: state.params,
             weight_deltas: Box::new(WeightDeltas::default()),
         }
     }
 
-    pub fn get_params(self) -> Box<Params> {
-        self.params
+    pub fn into_state(self) -> State {
+        State {
+            activation_fn: self.activation_fn,
+            params: self.params,
+        }
+    }
+
+    pub fn set_activation_function(&mut self, activation_fn: ActivationFunction) {
+        self.activation_fn = activation_fn;
     }
 }
 
@@ -312,4 +338,30 @@ fn softmax<const N: usize>(x: &[f32; N], derivative: bool) -> [f32; N] {
         }
     }
     result
+}
+
+/// ReLU(x) = max(0, x)
+fn rectified_linear_unit<const N: usize>(x: &[f32; N], derivative: bool) -> [f32; N] {
+    let mut result = [0.0; N];
+    if derivative {
+        for i in 0..N {
+            if x[i] > 0.0 {
+                result[i] = 1.0;
+            }
+        }
+    } else {
+        for i in 0..N {
+            if x[i] > 0.0 {
+                result[i] = x[i];
+            }
+        }
+    }
+
+    result
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub enum ActivationFunction {
+    Sigmoid,
+    RectifiedLinearUnit,
 }

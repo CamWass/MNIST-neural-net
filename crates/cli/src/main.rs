@@ -46,16 +46,16 @@ fn main() {
         );
     }
 
-    let params = network.get_params();
+    let state = network.into_state();
 
-    let params = to_allocvec(&params).unwrap();
+    let state = to_allocvec(&state).unwrap();
 
     fs::write(
         format!(
-            "pretrained/pretrained-params-{}",
+            "pretrained/pretrained-{}",
             accuracy.overall.percent_correct().round() as usize
         ),
-        params,
+        state,
     )
     .unwrap();
 }
