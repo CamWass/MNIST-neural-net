@@ -5,14 +5,38 @@
     <title>Hello wasm-pack!</title>
   </head>
   <body>
-    <canvas id="sheet"></canvas>
-    <button type="button" id="clear">Clear</button>
-    <button type="button" id="submit">Submit</button>
+    <div class="row">
+      <div class="col">
+        <canvas id="sheet" width="560" height="560"></canvas>
+      </div>
 
-    <div id="grid" class="grid"></div>
+      <div class="col" style="margin-left: 1em">
+        <div>
+          <button type="button" id="clear">Clear</button>
+          <button type="button" id="submit">Submit</button>
+        </div>
+
+        <h3>Input to neural network:</h3>
+        <div id="grid" class="grid"></div>
+        <h3>Output from neural network:</h3>
+        <p id="output" style="margin-top: 0">N/A</p>
+      </div>
+    </div>
 
     <style>
-      canvas {
+      .row {
+        display: flex;
+        flex-direction: row;
+        margin: 1em;
+      }
+
+      .col {
+        display: flex;
+        flex-direction: column;
+      }
+
+      canvas,
+      .grid {
         border: 1px solid black;
         background: black;
       }
@@ -27,6 +51,16 @@
       .pixel {
         height: 5px;
         width: 5px;
+      }
+
+      button {
+        padding: 0.2em 1em;
+        border: 1px solid gray;
+        border-radius: 0.2em;
+      }
+
+      body {
+        margin: 0;
       }
     </style>
 

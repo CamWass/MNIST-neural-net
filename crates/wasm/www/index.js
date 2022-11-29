@@ -43,6 +43,7 @@ document.getElementById("clear").addEventListener("click", () => {
 });
 
 const grid = document.getElementById("grid");
+const output = document.getElementById("output");
 
 document.getElementById("submit").addEventListener("click", () => {
   const newCanvas = document.createElement("canvas");
@@ -78,8 +79,6 @@ document.getElementById("submit").addEventListener("click", () => {
   grid.innerHTML = "";
   grid.appendChild(frag);
 
-  console.log(imageData);
-
   const result = neuralNet.classify(imageData);
-  console.log(result);
+  output.textContent = result;
 });
