@@ -44,6 +44,7 @@ document.getElementById("clear").addEventListener("click", () => {
 
 const grid = document.getElementById("grid");
 const output = document.getElementById("output");
+const breakdownRows = document.querySelectorAll("td.confidence");
 
 document.getElementById("submit").addEventListener("click", () => {
   const newCanvas = document.createElement("canvas");
@@ -79,6 +80,14 @@ document.getElementById("submit").addEventListener("click", () => {
   grid.innerHTML = "";
   grid.appendChild(frag);
 
-  const result = neuralNet.classify(imageData);
-  output.textContent = result;
+  const breakdown = new Float32Array(10);
+
+  const prediction = neuralNet.classify(imageData, breakdown);
+  output.textContent = prediction;
+
+  for (let i = 0; i < breakdownRows.length; i++) {
+    const row = breakdownRows[i];
+    const confidence = breakdown[i] * 100;
+    row.textContent = `${confidence.toFixed(2)}%`;
+  }
 });

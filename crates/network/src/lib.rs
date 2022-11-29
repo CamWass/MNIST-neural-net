@@ -239,17 +239,9 @@ impl NeuralNet {
         }
     }
 
-    pub fn classify(&mut self, image: &[f32; 784]) -> u8 {
+    pub fn classify(&mut self, image: &[f32; 784]) -> &[f32; 10] {
         self.forward_pass(image);
-        let prediction = self
-            .params
-            .a3
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .map(|(index, _)| index)
-            .unwrap() as u8;
-        prediction
+        &self.params.a3
     }
 
     pub fn restore_from_state(state: State) -> Self {

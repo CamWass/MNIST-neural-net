@@ -34,14 +34,23 @@ impl NeuralNet {
         NeuralNet(make_neural_net())
     }
 
-    pub fn classify(&mut self, image: &[u8]) -> u8 {
+    pub fn classify(&mut self, image: &[u8], breakdown: &mut [f32]) -> u8 {
         let image = as_chunks(image);
         assert_eq!(image.0.len(), 1);
         assert_eq!(image.1.len(), 0);
         let image_data = &image.0[0];
         let mut image = Box::new([0.0; 784]);
         encode_image(image_data, &mut image);
-        let prediction = self.0.classify(&image);
+
+        let classification = self.0.classify(&image);
+        breakdown.copy_from_slice(classification);
+
+        let prediction = classification
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(index, _)| index)
+            .unwrap() as u8;
         prediction
     }
 }
