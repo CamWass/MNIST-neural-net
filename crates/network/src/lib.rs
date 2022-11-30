@@ -62,11 +62,13 @@ pub struct State {
 }
 
 const LEARN_RATE: f32 = 0.001;
+const MOMENTUM: f32 = 0.9;
 
 pub struct NeuralNet {
     activation_fn: ActivationFunction,
     params: Box<Params>,
     weight_deltas: Box<WeightDeltas>,
+    prev_weight_deltas: Box<WeightDeltas>,
 }
 
 impl NeuralNet {
@@ -102,6 +104,7 @@ impl NeuralNet {
             activation_fn: ActivationFunction::RectifiedLinearUnit,
             params,
             weight_deltas: Box::new(WeightDeltas::default()),
+            prev_weight_deltas: Box::new(WeightDeltas::default()),
         }
     }
 
@@ -177,15 +180,34 @@ impl NeuralNet {
         fn update_params<const M: usize, const N: usize, const S: usize>(
             weights: &mut Matrix<f32, M, N, S>,
             deltas: &Matrix<f32, M, N, S>,
+            prev_deltas: &mut Matrix<f32, M, N, S>,
         ) {
-            for (w, delta) in weights.iter_mut().zip(deltas.iter()) {
-                *w -= LEARN_RATE * delta;
+            for ((w, delta), prev_delta) in weights
+                .iter_mut()
+                .zip(deltas.iter())
+                .zip(prev_deltas.iter_mut())
+            {
+                let new_delta = LEARN_RATE * delta + MOMENTUM * *prev_delta;
+                *w -= new_delta;
+                *prev_delta = new_delta;
             }
         }
 
-        update_params(&mut self.params.w1, &self.weight_deltas.w1);
-        update_params(&mut self.params.w2, &self.weight_deltas.w2);
-        update_params(&mut self.params.w3, &self.weight_deltas.w3);
+        update_params(
+            &mut self.params.w1,
+            &self.weight_deltas.w1,
+            &mut self.prev_weight_deltas.w1,
+        );
+        update_params(
+            &mut self.params.w2,
+            &self.weight_deltas.w2,
+            &mut self.prev_weight_deltas.w2,
+        );
+        update_params(
+            &mut self.params.w3,
+            &self.weight_deltas.w3,
+            &mut self.prev_weight_deltas.w3,
+        );
     }
 
     pub fn compute_accuracy(&mut self, images: &[[f32; 784]], labels: &[[f32; 10]]) -> Accuracy {
@@ -249,6 +271,7 @@ impl NeuralNet {
             activation_fn: state.activation_fn,
             params: state.params,
             weight_deltas: Box::new(WeightDeltas::default()),
+            prev_weight_deltas: Box::new(WeightDeltas::default()),
         }
     }
 
