@@ -1,6 +1,5 @@
 use std::{
     fmt,
-    iter::Sum,
     marker::PhantomData,
     ops::{AddAssign, Mul},
 };
@@ -121,6 +120,43 @@ pub struct TransposedMatrix<'a, T, const M: usize, const N: usize, const S: usiz
     inner: &'a Matrix<T, N, M, S>,
 }
 
+const BLOCK_SIZE: usize = 8;
+
+fn matrix_multiply<T, const M: usize, const N: usize>(
+    matrix: &[T],
+    other: &[T; N],
+    transpose: bool,
+) -> [T; M]
+where
+    T: Mul<Output = T> + Default + Copy + AddAssign,
+{
+    let mut result = [T::default(); M];
+
+    let mut i = 0;
+    while i < M {
+        let mut j = 0;
+        while j < N {
+            let mut x = i;
+            while x < M.min(i + BLOCK_SIZE) {
+                let mut y = j;
+                while y < N.min(j + BLOCK_SIZE) {
+                    if transpose {
+                        result[x] += matrix[y * M + x] * other[y];
+                    } else {
+                        result[x] += matrix[x * N + y] * other[y];
+                    }
+
+                    y += 1;
+                }
+                x += 1;
+            }
+            j += BLOCK_SIZE;
+        }
+        i += BLOCK_SIZE;
+    }
+    result
+}
+
 pub trait MatrixMultiply<T, const M: usize, const N: usize> {
     fn multiply_by(&self, other: &[T; N]) -> [T; M];
 }
@@ -128,16 +164,10 @@ pub trait MatrixMultiply<T, const M: usize, const N: usize> {
 impl<T, const M: usize, const N: usize, const S: usize> MatrixMultiply<T, M, N>
     for Matrix<T, M, N, S>
 where
-    T: Mul<Output = T> + Default + Copy + AddAssign + Sum<T>,
+    T: Mul<Output = T> + Default + Copy + AddAssign,
 {
     fn multiply_by(&self, other: &[T; N]) -> [T; M] {
-        let mut result = [T::default(); M];
-        for col in 0..N {
-            for row in 0..M {
-                result[row] += self.inner[row * N + col] * other[col];
-            }
-        }
-        result
+        matrix_multiply(self.inner.as_ref(), other, false)
     }
 }
 
@@ -147,13 +177,7 @@ where
     T: Mul<Output = T> + Default + Copy + AddAssign,
 {
     fn multiply_by(&self, other: &[T; N]) -> [T; M] {
-        let mut result = [T::default(); M];
-        for row in 0..N {
-            for col in 0..M {
-                result[col] += self.inner.inner[row * M + col] * other[row];
-            }
-        }
-        result
+        matrix_multiply(self.inner.inner.as_ref(), other, true)
     }
 }
 
