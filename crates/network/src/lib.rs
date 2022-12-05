@@ -142,8 +142,7 @@ impl NeuralNet {
         // Calculate W2 update
 
         let z2_sigmoid = self.call_activation_fn(&self.params.z2, true);
-        let w3_transpose = self.params.w3.transpose();
-        let mut error = w3_transpose.multiply_by(&error);
+        let mut error = self.params.w3.transpose().multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z2_sigmoid) {
             *a = *a * b;
         }
@@ -152,8 +151,7 @@ impl NeuralNet {
         // Calculate W1 update
 
         let z1_sigmoid = self.call_activation_fn(&self.params.z1, true);
-        let w2_transpose = self.params.w2.transpose();
-        let mut error = w2_transpose.multiply_by(&error);
+        let mut error = self.params.w2.transpose().multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z1_sigmoid) {
             *a = *a * b;
         }
