@@ -83,14 +83,13 @@ impl<T, const M: usize, const N: usize, const S: usize> Matrix<T, M, N, S> {
     }
 }
 
-// TODO: may be able to replace this with somthing safe using .try_into()
 fn vec_to_boxed_array<T, const S: usize>(vec: Vec<T>) -> Box<[T; S]> {
-    assert_eq!(vec.len(), S);
-    let boxed_slice = vec.into_boxed_slice();
-
-    let ptr = Box::into_raw(boxed_slice) as *mut [T; S];
-
-    unsafe { Box::from_raw(ptr) }
+    match vec.try_into() {
+        Ok(v) => v,
+        Err(_) => {
+            unreachable!("vec has unexpected size");
+        }
+    }
 }
 
 impl<T, const M: usize, const N: usize, const S: usize> Matrix<T, M, N, S>
