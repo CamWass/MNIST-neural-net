@@ -38,6 +38,9 @@ canvas.addEventListener("touchstart", draw("add", "touchmove", "touchend"));
 canvas.addEventListener("mouseup", draw("remove", "mousemove", "mouseup"));
 canvas.addEventListener("touchend", draw("remove", "touchmove", "touchend"));
 
+document.body.addEventListener("mouseup", draw("remove", "mousemove", "mouseup"));
+document.body.addEventListener("touchend", draw("remove", "touchmove", "touchend"));
+
 document.getElementById("clear").addEventListener("click", () => {
   g.clearRect(0, 0, canvas.width, canvas.height);
 });
