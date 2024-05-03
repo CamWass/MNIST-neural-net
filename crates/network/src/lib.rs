@@ -6,37 +6,19 @@ use serde::{Deserialize, Serialize};
 
 use util::*;
 
-#[derive(Serialize, Deserialize)]
 struct Params {
-    w1: Matrix<f32, 128, 784, 100_352>,
-    w2: Matrix<f32, 64, 128, 8192>,
-    w3: Matrix<f32, 10, 64, 640>,
-
-    #[serde(with = "serde_arrays")]
-    a0: [f32; 784],
-    #[serde(with = "serde_arrays")]
     a1: [f32; 128],
-    #[serde(with = "serde_arrays")]
     a2: [f32; 64],
-    #[serde(with = "serde_arrays")]
     a3: [f32; 10],
 
-    #[serde(with = "serde_arrays")]
     z1: [f32; 128],
-    #[serde(with = "serde_arrays")]
     z2: [f32; 64],
-    #[serde(with = "serde_arrays")]
     z3: [f32; 10],
 }
 
 impl Default for Params {
     fn default() -> Self {
         Self {
-            w1: Matrix::default(),
-            w2: Matrix::default(),
-            w3: Matrix::default(),
-
-            a0: [0.0; 784],
             a1: [0.0; 128],
             a2: [0.0; 64],
             a3: [0.0; 10],
@@ -48,8 +30,8 @@ impl Default for Params {
     }
 }
 
-#[derive(Default)]
-struct WeightDeltas {
+#[derive(Default, Serialize, Deserialize)]
+struct Weights {
     w1: Matrix<f32, 128, 784, 100_352>,
     w2: Matrix<f32, 64, 128, 8192>,
     w3: Matrix<f32, 10, 64, 640>,
@@ -58,7 +40,7 @@ struct WeightDeltas {
 #[derive(Serialize, Deserialize)]
 pub struct State {
     activation_fn: ActivationFunction,
-    params: Box<Params>,
+    weights: Weights,
 }
 
 const LEARN_RATE: f32 = 0.001;
@@ -66,9 +48,10 @@ const MOMENTUM: f32 = 0.9;
 
 pub struct NeuralNet {
     activation_fn: ActivationFunction,
+    weights: Weights,
     params: Box<Params>,
-    weight_deltas: Box<WeightDeltas>,
-    prev_weight_deltas: Box<WeightDeltas>,
+    weight_deltas: Weights,
+    prev_weight_deltas: Weights,
 }
 
 impl NeuralNet {
@@ -81,7 +64,7 @@ impl NeuralNet {
     }
 
     fn init(rnd_seed: u64) -> Self {
-        let mut params = Box::new(Params::default());
+        let mut weights = Weights::default();
 
         let mut rng: DistIter<_, _, f32> =
             SmallRng::seed_from_u64(rnd_seed).sample_iter(StandardNormal);
@@ -90,42 +73,40 @@ impl NeuralNet {
         let hidden_2 = 64;
         let output_layer = 10;
 
-        for element in params.w1.iter_mut() {
+        for element in weights.w1.iter_mut() {
             *element = rng.next().unwrap() * (1.0 / hidden_1 as f32).sqrt();
         }
-        for element in params.w2.iter_mut() {
+        for element in weights.w2.iter_mut() {
             *element = rng.next().unwrap() * (1.0 / hidden_2 as f32).sqrt();
         }
-        for element in params.w3.iter_mut() {
+        for element in weights.w3.iter_mut() {
             *element = rng.next().unwrap() * (1.0 / output_layer as f32).sqrt();
         }
 
         Self {
             activation_fn: ActivationFunction::RectifiedLinearUnit,
-            params,
-            weight_deltas: Box::new(WeightDeltas::default()),
-            prev_weight_deltas: Box::new(WeightDeltas::default()),
+            weights,
+            params: Box::new(Params::default()),
+            weight_deltas: Weights::default(),
+            prev_weight_deltas: Weights::default(),
         }
     }
 
     fn forward_pass(&mut self, image: &[f32; 784]) {
-        // input layer activations becomes sample
-        self.params.a0.copy_from_slice(image);
-
         // input layer to hidden layer 1
-        self.params.z1 = self.params.w1.multiply_by(&self.params.a0);
+        self.params.z1 = self.weights.w1.multiply_by(&image);
         self.params.a1 = self.call_activation_fn(&self.params.z1, false);
 
         // hidden layer 1 to hidden layer 2
-        self.params.z2 = self.params.w2.multiply_by(&self.params.a1);
+        self.params.z2 = self.weights.w2.multiply_by(&self.params.a1);
         self.params.a2 = self.call_activation_fn(&self.params.z2, false);
 
         // hidden layer 2 to output layer
-        self.params.z3 = self.params.w3.multiply_by(&self.params.a2);
+        self.params.z3 = self.weights.w3.multiply_by(&self.params.a2);
         self.params.a3 = softmax(&self.params.z3, false);
     }
 
-    fn backward_pass(&mut self, target: &[f32; 10]) {
+    fn backward_pass(&mut self, image: &[f32; 784], target: &[f32; 10]) {
         // This is the backpropagation algorithm, for calculating the updates
         // of the neural network's parameters.
 
@@ -142,7 +123,7 @@ impl NeuralNet {
         // Calculate W2 update
 
         let z2_sigmoid = self.call_activation_fn(&self.params.z2, true);
-        let mut error = self.params.w3.transpose().multiply_by(&error);
+        let mut error = self.weights.w3.transpose().multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z2_sigmoid) {
             *a = *a * b;
         }
@@ -151,11 +132,11 @@ impl NeuralNet {
         // Calculate W1 update
 
         let z1_sigmoid = self.call_activation_fn(&self.params.z1, true);
-        let mut error = self.params.w2.transpose().multiply_by(&error);
+        let mut error = self.weights.w2.transpose().multiply_by(&error);
         for (a, b) in error.iter_mut().zip(z1_sigmoid) {
             *a = *a * b;
         }
-        outer_product(&mut self.weight_deltas.w1, &error, &self.params.a0);
+        outer_product(&mut self.weight_deltas.w1, &error, image);
     }
 
     fn call_activation_fn<const N: usize>(&self, x: &[f32; N], derivative: bool) -> [f32; N] {
@@ -192,17 +173,17 @@ impl NeuralNet {
         }
 
         update_params(
-            &mut self.params.w1,
+            &mut self.weights.w1,
             &self.weight_deltas.w1,
             &mut self.prev_weight_deltas.w1,
         );
         update_params(
-            &mut self.params.w2,
+            &mut self.weights.w2,
             &self.weight_deltas.w2,
             &mut self.prev_weight_deltas.w2,
         );
         update_params(
-            &mut self.params.w3,
+            &mut self.weights.w3,
             &self.weight_deltas.w3,
             &mut self.prev_weight_deltas.w3,
         );
@@ -249,7 +230,7 @@ impl NeuralNet {
     /// Only pub for benchmarks.
     pub fn train_one(&mut self, train_image: &[f32; 784], train_label: &[f32; 10]) {
         self.forward_pass(train_image);
-        self.backward_pass(train_label);
+        self.backward_pass(train_image, train_label);
         self.update_network_parameters();
     }
 
@@ -267,16 +248,17 @@ impl NeuralNet {
     pub fn restore_from_state(state: State) -> Self {
         Self {
             activation_fn: state.activation_fn,
-            params: state.params,
-            weight_deltas: Box::new(WeightDeltas::default()),
-            prev_weight_deltas: Box::new(WeightDeltas::default()),
+            params: Box::new(Params::default()),
+            weights: state.weights,
+            weight_deltas: Weights::default(),
+            prev_weight_deltas: Weights::default(),
         }
     }
 
     pub fn into_state(self) -> State {
         State {
             activation_fn: self.activation_fn,
-            params: self.params,
+            weights: self.weights,
         }
     }
 
